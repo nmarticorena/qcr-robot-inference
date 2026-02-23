@@ -1,6 +1,6 @@
 [workspace]
 authors = [""]
-channels = ["conda-forge"]
+channels = ["conda-forge", "nmarticorena"]
 name = "real-robot-inference"
 platforms = ["linux-64"]
 version = "1.0.0"
@@ -84,11 +84,13 @@ jupyter = ">=1.1.1,<2"
 nbstripout = ">=0.8.1,<0.9"
 inquirerpy = ">=0.3.4,<0.4"
 pybind11 = ">=3.0.1,<4"
-rerun-sdk = ">=0.27.2,<0.28"
+rerun-sdk = ">=0.29.2,<0.30"
 yourdfpy = ">=0.0.57,<0.0.58"
 trimesh = ">=4.10.0,<5"
 pycollada = ">=0.9.2,<0.10"
 grad-cam = ">=1.5.5,<2"
+robot_descriptions = ">=1.22.0,<2"
+motion_tools = ">=0.1.17,<0.2"
 
 [pypi-options]
 no-build-isolation = true
