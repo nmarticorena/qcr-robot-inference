@@ -41,9 +41,8 @@ class ReRunRobot:
         quad = [quaternion[1], quaternion[2], quaternion[3], quaternion[0]]  # xyzw
         rr.log(
             f"{self.name}/{name}",
-            rr.Transform3D(
-                translation=position, rotation=rr.Quaternion(xyzw=quad), axis_length=0.1
-            ),
+            rr.Transform3D(translation=position, rotation=rr.Quaternion(xyzw=quad)),
+            rr.TransformAxes3D(axis_length=0.1),
         )
 
     def log_frame(self, image, camera_name):
