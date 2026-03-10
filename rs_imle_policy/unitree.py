@@ -79,6 +79,7 @@ class G1_29_ArmController:
     def __init__(self, motion_mode=False, simulation_mode=False):
         logger_mp.info("Initialize G1_29_ArmController...")
         self.q_target = np.zeros(14)
+        self.dq_target = np.zeros(14)
         self.tauff_target = np.zeros(14)
         self.motion_mode = motion_mode
         self.simulation_mode = simulation_mode
@@ -184,6 +185,7 @@ class G1_29_ArmController:
 
             with self.ctrl_lock:
                 arm_q_target = self.q_target
+                arm_dq_target = self.dq_target  # noqa: F841
                 arm_tauff_target = self.tauff_target
 
             if self.simulation_mode:
@@ -195,6 +197,7 @@ class G1_29_ArmController:
 
             for idx, id in enumerate(G1_29_JointArmIndex):
                 self.msg.motor_cmd[id].q = cliped_arm_q_target[idx]
+                # self.msg.motor_cmd[id].dq = arm_dq_target[idx]
                 self.msg.motor_cmd[id].dq = 0
                 self.msg.motor_cmd[id].tau = arm_tauff_target[idx]
 
@@ -216,6 +219,12 @@ class G1_29_ArmController:
         """Set control target values q & tau of the left and right arm motors."""
         with self.ctrl_lock:
             self.q_target = q_target
+            self.tauff_target = tauff_target
+
+    def ctrl_dual_arm_vel(self, dq_target, tauff_target):
+        """Set control target values q & tau of the left and right arm motors."""
+        with self.ctrl_lock:
+            self.dq_target = dq_target
             self.tauff_target = tauff_target
 
     def get_mode_machine(self):
@@ -286,7 +295,6 @@ class G1_29_ArmController:
         weak_motors = [
             G1_29_JointIndex.kLeftAnklePitch.value,
             G1_29_JointIndex.kRightAnklePitch.value,
-            # Left arm
             G1_29_JointIndex.kLeftShoulderPitch.value,
             G1_29_JointIndex.kLeftShoulderRoll.value,
             G1_29_JointIndex.kLeftShoulderYaw.value,
