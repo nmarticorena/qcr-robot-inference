@@ -83,8 +83,7 @@ DEX3_HAND_JOINTS = [
     "right_hand_middle_1_joint",
 ]
 
-INSPIRE_HAND_JOINTS = [
-    # Inspire hand Joints
+INSPIRE_FTP_HAND_JOINTS = [
     "left_index_1_joint",
     "left_index_2_joint",
     "left_little_1_joint",
@@ -109,4 +108,31 @@ INSPIRE_HAND_JOINTS = [
     "right_thumb_2_joint",
     "right_thumb_3_joint",
     "right_thumb_4_joint",
+]
+
+INSPIRE_DFQ_HAND_JOINTS = [
+    "L_index_proximal_joint",
+    "L_index_intermediate_joint",
+    "L_middle_proximal_joint",
+    "L_middle_intermediate_joint",
+    "L_ring_proximal_joint",
+    "L_ring_intermediate_joint",
+    "L_thumb_proximal_yaw_joint",
+    "L_thumb_proximal_pitch_joint",
+    "L_thumb_intermediate_joint",
+    "L_thumb_distal_joint",
+    "L_pinky_proximal_joint",
+    "L_pinky_intermediate_joint",
+    "R_index_proximal_joint",
+    "R_index_intermediate_joint",
+    "R_middle_proximal_joint",
+    "R_middle_intermediate_joint",
+    "R_ring_proximal_joint",
+    "R_ring_intermediate_joint",
+    "R_thumb_proximal_yaw_joint",
+    "R_thumb_proximal_pitch_joint",
+    "R_thumb_intermediate_joint",
+    "R_thumb_distal_joint",
+    "R_pinky_proximal_joint",
+    "R_pinky_intermediate_joint",
 ]
