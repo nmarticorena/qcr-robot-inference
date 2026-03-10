@@ -1,3 +1,4 @@
+<?xml version="1.0"?>
 <robot name="g1">
   <material name="dark">
     <color rgba="0.2 0.2 0.2 1"/>
@@ -5,7 +6,6 @@
   <material name="white">
     <color rgba="0.7 0.7 0.7 1"/>
   </material>
-
   <link name="pelvis">
     <inertial>
       <origin xyz="0 0 -0.07605" rpy="0 0 0"/>
@@ -24,7 +24,7 @@
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="pelvis"/>
+      <convex name="pelvis"/>
     </collision_checking>
   </link>
   <link name="pelvis_contour_link">
@@ -38,12 +38,11 @@
       </geometry>
       <material name="white"/>
     </visual>
-      </link>
+  </link>
   <joint name="pelvis_contour_joint" type="fixed">
     <parent link="pelvis"/>
     <child link="pelvis_contour_link"/>
   </joint>
-
   <!-- Legs -->
   <link name="left_hip_pitch_link">
     <inertial>
@@ -63,9 +62,9 @@
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="left_hip_pitch_link"/>
+      <convex name="left_hip_pitch_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="left_hip_pitch_joint" type="revolute">
     <origin xyz="0 0.064452 -0.1027" rpy="0 0 0"/>
     <parent link="pelvis"/>
@@ -91,9 +90,9 @@
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="left_hip_roll_link"/>
+      <convex name="left_hip_roll_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="left_hip_roll_joint" type="revolute">
     <origin xyz="0 0.052 -0.030465" rpy="0 -0.1749 0"/>
     <parent link="left_hip_pitch_link"/>
@@ -119,7 +118,7 @@
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="left_hip_yaw_link"/>
+      <convex name="left_hip_yaw_link"/>
     </collision_checking>
   </link>
   <joint name="left_hip_yaw_joint" type="revolute">
@@ -141,15 +140,15 @@
       </geometry>
       <material name="white"/>
     </visual>
-    <collision name ="left_knee_link">
+    <collision name="left_knee_link">
       <geometry>
         <mesh filename="g1/assets/collisions/left_knee_link_collision.STL"/>
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="left_knee_link"/>
+      <convex name="left_knee_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="left_knee_joint" type="revolute">
     <origin xyz="-0.078273 0.0021489 -0.17734" rpy="0 0.1749 0"/>
     <parent link="left_hip_yaw_link"/>
@@ -169,7 +168,7 @@
       </geometry>
       <material name="white"/>
     </visual>
-      </link>
+  </link>
   <joint name="left_ankle_pitch_joint" type="revolute">
     <origin xyz="0 -9.4445E-05 -0.30001" rpy="0 0 0"/>
     <parent link="left_knee_link"/>
@@ -195,7 +194,7 @@
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="left_ankle_roll_link"/>
+      <convex name="left_ankle_roll_link"/>
     </collision_checking>
   </link>
   <joint name="left_ankle_roll_joint" type="revolute">
@@ -221,11 +220,11 @@
       <geometry>
         <mesh filename="g1/assets/collisions/right_hip_pitch_link_collision.STL"/>
       </geometry>
-  </collision>
-  <collision_checking>
-      <convex name ="right_hip_pitch_link"/>
+    </collision>
+    <collision_checking>
+      <convex name="right_hip_pitch_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="right_hip_pitch_joint" type="revolute">
     <origin xyz="0 -0.064452 -0.1027" rpy="0 0 0"/>
     <parent link="pelvis"/>
@@ -245,15 +244,15 @@
       </geometry>
       <material name="white"/>
     </visual>
-    <collision name="right_hip_roll_link" >
+    <collision name="right_hip_roll_link">
       <geometry>
         <mesh filename="g1/assets/collisions/right_hip_roll_link_collision.STL"/>
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="right_hip_roll_link"/>
+      <convex name="right_hip_roll_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="right_hip_roll_joint" type="revolute">
     <origin xyz="0 -0.052 -0.030465" rpy="0 -0.1749 0"/>
     <parent link="right_hip_pitch_link"/>
@@ -279,9 +278,9 @@
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="right_hip_yaw_link"/>
+      <convex name="right_hip_yaw_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="right_hip_yaw_joint" type="revolute">
     <origin xyz="0.025001 0 -0.12412" rpy="0 0 0"/>
     <parent link="right_hip_roll_link"/>
@@ -301,15 +300,15 @@
       </geometry>
       <material name="white"/>
     </visual>
-    <collision name ="right_knee_link">
+    <collision name="right_knee_link">
       <geometry>
         <mesh filename="g1/assets/collisions/right_knee_link_collision.STL"/>
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="right_knee_link"/>
+      <convex name="right_knee_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="right_knee_joint" type="revolute">
     <origin xyz="-0.078273 -0.0021489 -0.17734" rpy="0 0.1749 0"/>
     <parent link="right_hip_yaw_link"/>
@@ -329,7 +328,7 @@
       </geometry>
       <material name="white"/>
     </visual>
-      </link>
+  </link>
   <joint name="right_ankle_pitch_joint" type="revolute">
     <origin xyz="0 9.4445E-05 -0.30001" rpy="0 0 0"/>
     <parent link="right_knee_link"/>
@@ -355,9 +354,9 @@
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="right_ankle_roll_link"/>
+      <convex name="right_ankle_roll_link"/>
     </collision_checking>
-                  </link>
+  </link>
   <joint name="right_ankle_roll_joint" type="revolute">
     <origin xyz="0 0 -0.017558" rpy="0 0 0"/>
     <parent link="right_ankle_pitch_link"/>
@@ -365,7 +364,6 @@
     <axis xyz="1 0 0"/>
     <limit lower="-0.2618" upper="0.2618" effort="35" velocity="30"/>
   </joint>
-
   <!-- Torso -->
   <link name="waist_yaw_link">
     <inertial>
@@ -422,18 +420,17 @@
       <geometry>
         <mesh filename="g1/assets/collisions/torso_waist_roll_pitch_collision.STL"/>
       </geometry>
-  </collision>
-  <collision_checking>
-      <convex name ="torso_link"/>
+    </collision>
+    <collision_checking>
+      <convex name="torso_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="waist_pitch_joint" type="fixed">
     <parent link="waist_roll_link"/>
     <child link="torso_link"/>
     <axis xyz="0 1 0"/>
     <limit lower="-0.52" upper="0.52" effort="35" velocity="30"/>
   </joint>
-
   <!-- LOGO -->
   <joint name="logo_joint" type="fixed">
     <origin xyz="0.0039635 0 -0.044" rpy="0 0 0"/>
@@ -451,8 +448,7 @@
       </geometry>
       <material name="dark"/>
     </visual>
-      </link>
-
+  </link>
   <!-- Head -->
   <link name="head_link">
     <inertial>
@@ -470,42 +466,36 @@
       <geometry>
         <mesh filename="g1/assets/collisions/head_link_collision.STL"/>
       </geometry>
-  </collision>
-  <collision_checking>
-      <convex name ="head_link"/>
-  </collision_checking>
-
-      </link>
+    </collision>
+    <collision_checking>
+      <convex name="head_link"/>
+    </collision_checking>
+  </link>
   <joint name="head_joint" type="fixed">
     <origin xyz="0.0039635 0 -0.044" rpy="0 0 0"/>
     <parent link="torso_link"/>
     <child link="head_link"/>
   </joint>
-
-
   <!-- IMU -->
-  <link name="imu_in_torso"></link>
+  <link name="imu_in_torso"/>
   <joint name="imu_in_torso_joint" type="fixed">
     <origin xyz="-0.03959 -0.00224 0.14792" rpy="0 0 0"/>
     <parent link="torso_link"/>
     <child link="imu_in_torso"/>
   </joint>
-
-  <link name="imu_in_pelvis"></link>
+  <link name="imu_in_pelvis"/>
   <joint name="imu_in_pelvis_joint" type="fixed">
     <origin xyz="0.04525 0 -0.08339" rpy="0 0 0"/>
     <parent link="pelvis"/>
     <child link="imu_in_pelvis"/>
   </joint>
-
   <!-- d435 -->
-  <link name="d435_link"></link>
+  <link name="d435_link"/>
   <joint name="d435_joint" type="fixed">
     <origin xyz="0.0576235 0.01753 0.42987" rpy="0 0.8307767239493009 0"/>
     <parent link="torso_link"/>
     <child link="d435_link"/>
   </joint>
-
   <!-- battery -->
   <link name="battery">
     <inertial>
@@ -518,16 +508,13 @@
     <parent link="imu_in_torso"/>
     <child link="battery"/>
   </joint>
-
-
   <!-- mid360 -->
-  <link name="mid360_link"></link>
+  <link name="mid360_link"/>
   <joint name="mid360_joint" type="fixed">
     <origin xyz="0.0002835 0.00003 0.41618" rpy="0 0.04014257279586953 0"/>
     <parent link="torso_link"/>
     <child link="mid360_link"/>
   </joint>
-
   <!-- Arm -->
   <link name="left_shoulder_pitch_link">
     <inertial>
@@ -545,11 +532,11 @@
       <geometry>
         <mesh filename="g1/assets/collisions/left_shoulder_pitch_link_collision.STL"/>
       </geometry>
-  </collision>
-  <collision_checking>
-      <convex name ="left_shoulder_pitch_link"/>
+    </collision>
+    <collision_checking>
+      <convex name="left_shoulder_pitch_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="left_shoulder_pitch_joint" type="revolute">
     <origin xyz="0.0039563 0.10022 0.24778" rpy="0.27931 5.4949E-05 -0.00019159"/>
     <parent link="torso_link"/>
@@ -575,9 +562,9 @@
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="left_shoulder_roll_link"/>
+      <convex name="left_shoulder_roll_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="left_shoulder_roll_joint" type="revolute">
     <origin xyz="0 0.038 -0.013831" rpy="-0.27925 0 0"/>
     <parent link="left_shoulder_pitch_link"/>
@@ -603,9 +590,9 @@
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="left_shoulder_yaw_link"/>
+      <convex name="left_shoulder_yaw_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="left_shoulder_yaw_joint" type="revolute">
     <origin xyz="0 0.00624 -0.1032" rpy="0 0 0"/>
     <parent link="left_shoulder_roll_link"/>
@@ -631,9 +618,9 @@
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="left_elbow_link"/>
+      <convex name="left_elbow_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="left_elbow_joint" type="revolute">
     <origin xyz="0.015783 0 -0.080518" rpy="0 0 0"/>
     <parent link="left_shoulder_yaw_link"/>
@@ -664,11 +651,11 @@
       <geometry>
         <mesh filename="g1/assets/collisions/left_wrist_roll_link_collision.STL"/>
       </geometry>
-  </collision>
+    </collision>
     <collision_checking>
-        <convex name ="left_wrist_roll_link"/>
+      <convex name="left_wrist_roll_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="left_wrist_pitch_joint" type="revolute">
     <origin xyz="0.038 0 0" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
@@ -694,9 +681,9 @@
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="left_wrist_pitch_link"/>
+      <convex name="left_wrist_pitch_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="left_wrist_yaw_joint" type="revolute">
     <origin xyz="0.046 0 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
@@ -716,7 +703,7 @@
       </geometry>
       <material name="white"/>
     </visual>
-      </link>
+  </link>
   <joint name="left_hand_palm_joint" type="fixed">
     <origin xyz="0.0415 0.003 0" rpy="0 0 0"/>
     <parent link="left_wrist_yaw_link"/>
@@ -738,9 +725,9 @@
       <geometry>
         <mesh filename="g1/assets/collisions/left_wrist_hand_collision.STL"/>
       </geometry>
-  </collision>
+    </collision>
     <collision_checking>
-        <convex name ="left_rubber_hand"/>
+      <convex name="left_rubber_hand"/>
     </collision_checking>
   </link>
   <link name="right_shoulder_pitch_link">
@@ -759,11 +746,11 @@
       <geometry>
         <mesh filename="g1/assets/collisions/right_shoulder_pitch_link_collision.STL"/>
       </geometry>
-  </collision>
-  <collision_checking>
-        <convex name ="right_shoulder_pitch_link"/>
+    </collision>
+    <collision_checking>
+      <convex name="right_shoulder_pitch_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="right_shoulder_pitch_joint" type="revolute">
     <origin xyz="0.0039563 -0.10021 0.24778" rpy="-0.27931 5.4949E-05 0.00019159"/>
     <parent link="torso_link"/>
@@ -789,9 +776,9 @@
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="right_shoulder_roll_link"/>
+      <convex name="right_shoulder_roll_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="right_shoulder_roll_joint" type="revolute">
     <origin xyz="0 -0.038 -0.013831" rpy="0.27925 0 0"/>
     <parent link="right_shoulder_pitch_link"/>
@@ -817,9 +804,9 @@
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="right_shoulder_yaw_link"/>
+      <convex name="right_shoulder_yaw_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="right_shoulder_yaw_joint" type="revolute">
     <origin xyz="0 -0.00624 -0.1032" rpy="0 0 0"/>
     <parent link="right_shoulder_roll_link"/>
@@ -843,11 +830,11 @@
       <geometry>
         <mesh filename="g1/assets/collisions/right_elbow_link_collision.STL"/>
       </geometry>
-  </collision>
+    </collision>
     <collision_checking>
-        <convex name ="right_elbow_link"/>
+      <convex name="right_elbow_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="right_elbow_joint" type="revolute">
     <origin xyz="0.015783 0 -0.080518" rpy="0 0 0"/>
     <parent link="right_shoulder_yaw_link"/>
@@ -874,15 +861,15 @@
       </geometry>
       <material name="white"/>
     </visual>
-    <collision name="right_wrist_roll_link" >
+    <collision name="right_wrist_roll_link">
       <geometry>
         <mesh filename="g1/assets/collisions/right_wrist_roll_link_collision.STL"/>
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="right_wrist_roll_link"/>
+      <convex name="right_wrist_roll_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="right_wrist_pitch_joint" type="revolute">
     <origin xyz="0.038 0 0" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
@@ -908,9 +895,9 @@
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="right_wrist_pitch_link"/>
+      <convex name="right_wrist_pitch_link"/>
     </collision_checking>
-      </link>
+  </link>
   <joint name="right_wrist_yaw_joint" type="revolute">
     <origin xyz="0.046 0 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
@@ -930,7 +917,7 @@
       </geometry>
       <material name="white"/>
     </visual>
-      </link>
+  </link>
   <joint name="right_hand_palm_joint" type="fixed">
     <origin xyz="0.0415 -0.003 0" rpy="0 0 0"/>
     <parent link="right_wrist_yaw_link"/>
@@ -954,7 +941,7 @@
       </geometry>
     </collision>
     <collision_checking>
-        <convex name ="right_rubber_hand"/>
+      <convex name="right_rubber_hand"/>
     </collision_checking>
   </link>
 </robot>
