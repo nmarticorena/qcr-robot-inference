@@ -23,7 +23,7 @@ from rs_imle_policy.configs.train_config import (
     RSIMLE,
     VisionConfig,
 )
-from rs_imle_policy.dataset import normalize_data, unnormalize_data
+from rs_imle_policy.datasets.base_dataset import normalize_data, unnormalize_data
 from rs_imle_policy.policy import Policy
 from rs_imle_policy.realsense.multi_realsense import MultiRealsense
 from rs_imle_policy.robot import FrankxRobot, PandaPyRobot

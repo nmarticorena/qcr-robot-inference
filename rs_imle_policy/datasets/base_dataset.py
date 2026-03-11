@@ -120,7 +120,7 @@ class BaseDataset(Dataset, abc.ABC):
                 [np.array(self.rlds[episode][key]) for episode in self.rlds.keys()],
                 axis=0,
             )
-            self.stats[key] = self.get_data_stats(data)
+            self.stats[key] = get_data_stats(data)
 
         for keys in self.rlds[0].keys():
             get_data(keys)
@@ -129,7 +129,7 @@ class BaseDataset(Dataset, abc.ABC):
         """Apply normalization to every key in each episode."""
         for episode in self.rlds:
             for key in self.rlds[episode]:
-                self.rlds[episode][key] = self.normalize_data(
+                self.rlds[episode][key] = normalize_data(
                     np.array(self.rlds[episode][key]), self.stats[key]
                 )
 
@@ -268,47 +268,45 @@ class BaseDataset(Dataset, abc.ABC):
             **frames,
         }
 
-    @staticmethod
-    def get_data_stats(data: NDArray) -> dict:
-        """Compute normalization statistics for data.
 
-        Args:
-            data: Input data array
+def get_data_stats(data: NDArray) -> dict:
+    """Compute normalization statistics for data.
 
-        Returns:
-            Dictionary with 'min' and 'max' statistics
-        """
-        stats = {"min": np.min(data, axis=0), "max": np.max(data, axis=0)}
-        return stats
+    Args:
+        data: Input data array
 
-    @staticmethod
-    def normalize_data(data: NDArray, stats: dict) -> NDArray:
-        """Normalize data to [-1, 1] range.
+    Returns:
+        Dictionary with 'min' and 'max' statistics
+    """
+    stats = {"min": np.min(data, axis=0), "max": np.max(data, axis=0)}
+    return stats
 
-        Args:
-            data: Input data array
-            stats: Dictionary containing 'min' and 'max' statistics
 
-        Returns:
-            Normalized data in range [-1, 1]
-        """
-        ndata = (data - stats["min"]) / (
-            stats["max"] - stats["min"]
-        )  # Normalize to [0,1]
-        ndata = ndata * 2 - 1  # Normalize to [-1,1]
-        return ndata
+def normalize_data(data: NDArray, stats: dict) -> NDArray:
+    """Normalize data to [-1, 1] range.
 
-    @staticmethod
-    def unnormalize_data(ndata: NDArray, stats: dict) -> NDArray:
-        """Unnormalize data from [-1, 1] range to original range.
+    Args:
+        data: Input data array
+        stats: Dictionary containing 'min' and 'max' statistics
 
-        Args:
-            ndata: Normalized data in range [-1, 1]
-            stats: Dictionary containing 'min' and 'max' statistics
+    Returns:
+        Normalized data in range [-1, 1]
+    """
+    ndata = (data - stats["min"]) / (stats["max"] - stats["min"])  # Normalize to [0,1]
+    ndata = ndata * 2 - 1  # Normalize to [-1,1]
+    return ndata
 
-        Returns:
-            Data in original range
-        """
-        ndata = (ndata + 1) / 2
-        data = ndata * (stats["max"] - stats["min"]) + stats["min"]
-        return data
+
+def unnormalize_data(ndata: NDArray, stats: dict) -> NDArray:
+    """Unnormalize data from [-1, 1] range to original range.
+
+    Args:
+        ndata: Normalized data in range [-1, 1]
+        stats: Dictionary containing 'min' and 'max' statistics
+
+    Returns:
+        Data in original range
+    """
+    ndata = (ndata + 1) / 2
+    data = ndata * (stats["max"] - stats["min"]) + stats["min"]
+    return data
