@@ -82,3 +82,13 @@ class G1ArmsDiffusionConfig(ExperimentConfig):
 
     model: RSIMLE | Diffusion = field(default_factory=Diffusion)
     data: DataConfig = field(default_factory=G1ArmsDataConfig)
+
+
+ExperimentConfigChoice = (
+    PickPlaceRSMLEConfig
+    | PickPlaceRSMLERelativeConfig
+    | PickPlaceDiffusionConfig
+    | PickPlaceDiffusionRelativeConfig
+    | G1ArmsRSIMLEConfig
+    | G1ArmsDiffusionConfig
+)
