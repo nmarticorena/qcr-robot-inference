@@ -275,6 +275,34 @@ class G1ReducedPinkIK:
 
         return velocity
 
+    def get_ee_poses(
+        self,
+        q: np.ndarray | None = None,
+    ) -> Targets:
+        """Return current L_ee and R_ee poses without mutating self.configuration.
+
+        Args:
+            q: Optional configuration to evaluate. If None, uses self.configuration.q.
+
+        Returns:
+            Targets with left/right EE poses in the world frame.
+        """
+        if q is None:
+            q = self.configuration.q
+
+        q = np.asarray(q).copy()  # defensive copy, so caller mutations do not matter
+
+        # Use fresh temporary data so we do not overwrite solver internals.
+        data = self.robot.model.createData()
+
+        pin.forwardKinematics(self.robot.model, data, q)
+        pin.updateFramePlacements(self.robot.model, data)
+
+        return Targets(
+            left=data.oMf[self.left_ee_id].copy(),
+            right=data.oMf[self.right_ee_id].copy(),
+        )
+
     @staticmethod
     def _as_se3(T: pin.SE3 | np.ndarray) -> pin.SE3:
         if isinstance(T, pin.SE3):
