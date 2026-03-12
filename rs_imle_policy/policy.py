@@ -42,7 +42,12 @@ class Policy:
         transform: Image preprocessing transforms
     """
 
-    def __init__(self, config: ExperimentConfig, dataset: BaseDataset | None = None):
+    def __init__(
+        self,
+        config: ExperimentConfig,
+        training: bool = True,
+        dataset: BaseDataset | None = None,
+    ):
         """Initialize the policy.
 
         Args:
@@ -62,7 +67,7 @@ class Policy:
 
         self.precision = torch.float32
         self.device = self.config.model.device
-        if self.config.training:
+        if training:
             assert dataset is not None, "Dataset must be provided for training mode"
             self.dataset = dataset
             self.dataloader = torch.utils.data.DataLoader(
@@ -95,7 +100,7 @@ class Policy:
         else:
             self.folder = os.path.join(
                 "saved_weights",
-                self.config.data.task_name,
+                self.config.task_name,
                 self.config.model.name + "_" + self.config.exp_name,
             )
             stats_path = os.path.join(self.folder, "stats.pkl")
