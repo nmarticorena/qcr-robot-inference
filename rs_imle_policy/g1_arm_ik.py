@@ -60,6 +60,7 @@ class G1ReducedPinkIK:
         spawn_visualizer: bool = True,
         q0: np.ndarray | None = None,
         pos_cost: float | Sequence[float] = 20.0,
+        debug: bool = False,
     ):
         self.urdf_path = urdf_path
         self.mesh_dirs = list(mesh_dirs)
