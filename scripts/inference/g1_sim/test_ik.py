@@ -8,9 +8,13 @@ import pinocchio as pin
 import rerun as rr
 from loop_rate_limiters import RateLimiter
 
+from teleimager.image_client import ImageClient
+
 # for simulation
 from unitree_sdk2py.core.channel import ChannelPublisher
 from unitree_sdk2py.idl.std_msgs.msg.dds_ import String_
+
+img_client = ImageClient("vlu-isaacsim.qut.edu.au", request_bgr=True)
 
 
 ChannelFactoryInitialize(id=1)  # dds domain id
@@ -28,7 +32,7 @@ publish_reset_category(1, reset_pose_publisher)
 
 rec = rr.RecordingStream("g1_arm_controller_test")
 controller = G1_29_ArmController(motion_mode=False, simulation_mode=True)
-frecuecy = 30
+frecuecy = 200
 rec.spawn()
 
 ik = G1ReducedPinkIK(
@@ -37,6 +41,7 @@ ik = G1ReducedPinkIK(
     srdf_path="assets/g1.srdf",
     visualize=True,
     spawn_visualizer=True,
+    enable_self_collision=False,
 )
 
 
@@ -62,11 +67,12 @@ while True:
     q_arm = controller.get_current_dual_arm_q()
     q_left_arm = q_arm[:7]
     q_right_arm = q_arm[7:14]
+    breakpoint()
 
     dq_arm = controller.get_current_dual_arm_dq()
     ik.configuration.update(q_arm.copy())
     ik.viz.display(q_arm.copy())
-    q_sol = ik.solve(dt=1 / 200, n_steps=5)
+    q_sol = ik.solve(dt=1 / 200, n_steps=1)
     full_q_sol = np.zeros(29)
     full_q_sol[15:29] = q_sol
     robot_sol.log(full_q_sol)
@@ -80,5 +86,11 @@ while True:
         np.zeros(ik.robot.model.nv),
     )
     controller.ctrl_dual_arm(q_sol, q_tauff)
+    robot_gui.rec.log(
+        "cameras/head_frame",
+        rr.EncodedImage(
+            contents=img_client.get_head_frame().jpg, media_type="image/jpeg"
+        ),
+    )
 
     rate.sleep()
