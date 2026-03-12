@@ -2,6 +2,7 @@ import collections
 from collections import defaultdict
 import time
 from dataclasses import dataclass
+from typing import Tuple
 
 import torch
 import cv2
@@ -11,6 +12,7 @@ import reactivex as rx
 from reactivex.scheduler import NewThreadScheduler
 from reactivex import operators as ops
 import spatialmath as sm
+import pinocchio as pin
 
 from teleimager.image_client import ImageClient
 from motion_tools.robot_gui import ReRunRobot
@@ -22,6 +24,10 @@ from rs_imle_policy.configs.train_config import (
 )
 
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+
+# For simulation
+from unitree_sdk2py.core.channel import ChannelPublisher
+from unitree_sdk2py.idl.std_msgs.msg.dds_ import String_
 
 import rs_imle_policy.utils.transforms as transforms_utils
 from rs_imle_policy.policy import Policy
@@ -39,6 +45,11 @@ GRIPPER_CLOSE_THRESHOLD = 0.5
 PROGRESS_COMPLETE_THRESHOLD = 0.95
 OBSERVATION_WAIT_TIME_MS = 1
 INFERENCE_TARGET_DT_MULTIPLIER = 4
+
+
+def publish_reset_category(category: int, publisher):  # Scene Reset signal
+    msg = String_(data=str(category))
+    publisher.Write(msg)
 
 
 class PerceptionSystem:
@@ -78,22 +89,28 @@ class G1ArmsInferenceController:
         eval_name: str,
         timeout: int,
         dry_run: bool = False,
+        simulation: bool = True,
     ):
         self.infer_idx = 0
         self.config = config
         self.eval_name = eval_name
         self.timeout = timeout
         self.dry_run = dry_run
+        self.simulation = simulation
 
         self.rec = rr.RecordingStream(f"g1_arms_inference_{eval_name}")
         self.rec.spawn()
         self.rerun_gui = ReRunRobot.g1(self.rec, target_frame="pelvis")
+
+        self.rerun_ik = ReRunRobot.g1_debug(self.rec, target_frame="pelvis")
+
+        self.rerun_ik.apply_color([0, 1, 0, 0.5])
         self.all_frames = defaultdict(list)
 
         self.perception_system = PerceptionSystem(
             "vlu-isaacsim.qut.edu.au", 60001
         )  # TODO: Need to get this from config
-        self.robot = G1RobotInterface()
+        self.robot = G1RobotInterface(simulation)
         self.setup_diffusion_policy()
 
     def run_experiments(self, episodes: int):
@@ -106,7 +123,10 @@ class G1ArmsInferenceController:
             self.idx = i
             print(f"Starting episode {i + 1}/{episodes}")
             self.done = False
-            input("Press Enter to start the next episode...")
+            if not self.simulation:
+                input("Press Enter to start the next episode...")
+            else:
+                self.robot.reset_sim()
             self.obs_deque.clear()
             self.inference_loop()
             print(f"Finished episode {i + 1}/{episodes}")
@@ -205,7 +225,7 @@ class G1ArmsInferenceController:
         return {"action": action}
 
     @torch.no_grad()
-    def convert_actions(self, action):
+    def convert_actions(self, action) -> Tuple[list[sm.SE3], list[sm.SE3], np.ndarray]:
         """
         Convert the raw action output from the policy into translation and rotation commands for the robot.
         Args:
@@ -226,6 +246,7 @@ class G1ArmsInferenceController:
 
         return left_poses, right_poses, progress
 
+    @torch.no_grad()  # Might be unncessary
     def inference_loop(self):
         """Main loop for running inference and controlling the robot."""
         obs_stream = (  # noqa: F841
@@ -237,16 +258,13 @@ class G1ArmsInferenceController:
 
         time.sleep(0.5)
 
-        # target_dt = 1.0 / DEFAULT_REFRESH_RATE_HZ * INFERENCE_TARGET_DT_MULTIPLIER
-
         while not self.done:
             while len(self.obs_deque) < self.obs_horizon:
                 time.sleep(OBSERVATION_WAIT_TIME_MS / 1000.0)
                 print("Waiting for observation")
 
-            # infer_start_time = time.perf_counter()
+            infer_start_time = time.perf_counter()
             obs = self.obs_deque.copy()
-            breakpoint()
             out = self.infer_action(obs)
             action = out["action"]
 
@@ -254,57 +272,39 @@ class G1ArmsInferenceController:
 
             X_WL, X_WR, progress = self.convert_actions(action)
 
+            n_actions = int(len(action) / 2)
+            X_WL = X_WL[n_actions:]
+            X_WR = X_WR[n_actions:]
+            progress = progress[n_actions:]
+
+            self.rerun_gui.rec.log("/plots/progress", rr.Scalars(progress[-1]))
+
             for pose_index, (x_wl, x_wr) in enumerate(zip(X_WL, X_WR)):
+                pass
                 self.rerun_gui.log_se3_transform(f"left_ee/{pose_index}", x_wl)
                 self.rerun_gui.log_se3_transform(f"right_ee/{pose_index}", x_wr)
 
-            print(progress)
+            for actions_index in range(n_actions):
+                self.robot.set_ee_targets(X_WL[actions_index].A, X_WR[actions_index].A)
+                for _ in range(1):
+                    q_sol = self.robot.step_servo()
+                    full_q_sol = np.zeros(29)
+                    full_q_sol[15:29] = q_sol
 
-            """
-
-            r = transform_utils.rotation_6d_to_matrix(action[:, 3:9])
-
-            self.log_poses(
-                n_trans, r.numpy(), relative=self.config.data.action_relative
-            )
-            progress = action[:, -1:]
-            rr.log("/action/gripper", rr.Scalars(action[0, -2].tolist()))
-            rr.log("/action/progress", rr.Scalars(action[0, -1].tolist()))
-
-            action_horizon_len = int(len(action) / 2)
-            relative = self.config.data.action_relative
-            self.robot.set_next_waypoints(
-                n_trans[0:action_horizon_len],
-                n_quads[0:action_horizon_len],
-                relative=relative,
-            )
-            for i in range(0, int(len(action) / 2)):
-                time.sleep(1 / DEFAULT_REFRESH_RATE_HZ)
-                if action[i][-2] > GRIPPER_CLOSE_THRESHOLD:
-                    self.robot.close_gripper()
-                else:
-                    self.robot.open_gripper()
+                    self.rerun_ik.log(full_q_sol)
 
             if progress[0] >= PROGRESS_COMPLETE_THRESHOLD:
-                self.robot.stop_motion()
-                obs_stream.dispose()
-                self.record_videos()
                 self.done = True
-
             elapsed_time = time.perf_counter() - infer_start_time
             rr.log("/debug/inference_time", rr.Scalars(elapsed_time))
-            remaining_time = target_dt - elapsed_time
-            if remaining_time > 0:
-                time.sleep(remaining_time)
+            # remaining_time = target_dt - elapsed_time
+            # if remaining_time > 0:
+            #     time.sleep(remaining_time)
 
             if (time.time() - start_time) > self.timeout:
                 print("Timeout reached, ending inference.")
-                self.robot.stop_motion()
-                obs_stream.dispose()
-                self.record_videos()
+                # obs_stream.dispose()
                 self.done = True
-
-            """
 
 
 @dataclass
@@ -328,21 +328,50 @@ class RobotState:
 
 
 class G1RobotInterface:
-    def __init__(self):
-        ChannelFactoryInitialize(id=1)  # dds domain id
-        self.controller = G1_29_ArmController(motion_mode=False, simulation_mode=True)
-        q0 = self.controller.get_current_dual_arm_q()
+    def __init__(self, simulation: bool = True):
+        dds_domain_id = 1 if simulation else 0
+        ChannelFactoryInitialize(id=dds_domain_id)  # dds domain id
+        self.controller = G1_29_ArmController(
+            motion_mode=False, simulation_mode=simulation
+        )
+        # self.q0 = self.controller.get_current_dual_arm_q()
+        self.q0 = np.zeros_like(self.controller.get_current_dual_arm_q())
         self.ik_solver = G1ReducedPinkIK(
             urdf_path="assets/g1.urdf",
             mesh_dirs=["assets/"],
             srdf_path="assets/g1.srdf",
             visualize=False,
             spawn_visualizer=False,
-            enable_self_collision=True,
-            q0=q0,
+            enable_self_collision=False,
+            q0=self.q0,
         )
         targets = self.ik_solver.get_targets_from_configuration()
         self.ik_solver.set_targets(targets.left, targets.right)
+        if simulation:
+            self.reset_pose_publisher = ChannelPublisher("rt/reset_pose/cmd", String_)
+            self.reset_pose_publisher.Init()
+
+    def reset_sim(self):
+        print("Resetting simulation to initial pose")
+        self.reset_arm()
+        publish_reset_category(1, self.reset_pose_publisher)
+
+    def reset_arm(self):
+        q_sol = self.q0.copy()
+        q_current = self.controller.get_current_dual_arm_q()
+
+        while np.linalg.norm(q_sol - q_current) > 0.1:
+            q_tauff = pin.rnea(
+                self.ik_solver.robot.model,
+                self.ik_solver.robot.data,
+                q_sol,
+                np.zeros(self.ik_solver.robot.model.nv),
+                np.zeros(self.ik_solver.robot.model.nv),
+            )
+            self.controller.ctrl_dual_arm(q_sol, q_tauff)
+            time.sleep(0.01)
+            q_current = self.controller.get_current_dual_arm_q()
+            print("Resetting arms, current error: ", np.linalg.norm(q_sol - q_current))
 
     def get_state(self) -> RobotState:
         """
@@ -369,3 +398,21 @@ class G1RobotInterface:
             left_arm_state=np.concatenate([pos_l, rot_l]),
             right_arm_state=np.concatenate([pos_r, rot_r]),
         )
+
+    def set_ee_targets(self, left, right) -> None:
+        self.ik_solver.set_targets(left, right)
+
+    def step_servo(self, dt: float = 1 / 200) -> np.ndarray:
+        q_arm = self.controller.get_current_dual_arm_q()
+        self.ik_solver.configuration.update(q_arm.copy())
+
+        q_sol = self.ik_solver.solve(dt=dt, n_steps=1)
+        q_tauff = pin.rnea(
+            self.ik_solver.robot.model,
+            self.ik_solver.robot.data,
+            q_sol,
+            np.zeros(self.ik_solver.robot.model.nv),
+            np.zeros(self.ik_solver.robot.model.nv),
+        )
+        self.controller.ctrl_dual_arm(q_sol, q_tauff)
+        return q_sol
