@@ -6,6 +6,7 @@ for training robot manipulation policies from demonstrations.
 
 import json
 import os
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -36,6 +37,7 @@ class G1ArmsDataset(BaseDataset):
         self,
         *args,
         use_next_state: bool = True,
+        urdf_path: str | None = None,
         **kwargs,
     ):
         """Initialize the policy dataset.
@@ -51,11 +53,14 @@ class G1ArmsDataset(BaseDataset):
             vision_config: Camera configuration
             visualize: If True, skip saving stats (for visualization only)
             use_next_state: If True, use next robot state as action target
+            urdf_path: Optional path to the G1 URDF file
         """
         self.use_next_state = use_next_state
-        self.robot = rtb.ERobot.URDF(
-            "/home/nmarticorena/Documents/PostDoc/real-robot-inference/g1.urdf"
+        repo_root = Path(__file__).resolve().parents[2]
+        resolved_urdf_path = (
+            Path(urdf_path) if urdf_path else repo_root / "g1_no_hands.urdf"
         )
+        self.robot = rtb.ERobot.URDF(str(resolved_urdf_path))
         super().__init__(*args, **kwargs)
 
     def create_rlds_dataset(self) -> dict:
@@ -224,13 +229,13 @@ if __name__ == "__main__":
             "left_robot_orien",
             "right_robot_pos",
             "right_robot_orien",
-            "progress",
         ],
         action_keys=[
             "left_action_pos",
             "left_action_orien",
             "right_action_pos",
             "right_action_orien",
+            "progress",
         ],
         vision_config=G1VisionConfig(),
     )
