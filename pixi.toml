@@ -103,15 +103,19 @@ libxml2 = ">=2.15.2,<3"
 urdfpy = ">=0.0.22,<0.0.23"
 pycollada = ">=0.9.3,<0.10"
 tyro = ">1"
+# viser = ">=1.0.24,<2"
+hatch-vcs = ">=0.5.0,<0.6"
+nodeenv = ">=1.10.0,<2"
+pink = ">=4.1.0"
 viser = ">=1.0.24,<2"
 
 [pypi-options]
 no-build-isolation = true
 
 [pypi-dependencies]
-motion_tools= {path = "../motion_retargeting/motions_tools/" , editable = true}
+motion_tools= {path = "../motion_tools/" , editable = true}
 # pin-pink = {git = "https://github.com/stephane-caron/pink.git", rev = "main"}
-pin-pink = {path = "../../tutorials/pink"}
+#pin-pink = {path = "../../tutorials/pink"}
 huggingface-hub = {extras = ["hf-transfer", "cli"]}
 rs_imle_policy = {path = ".", editable = true}
 roboticstoolbox-python = {git = "https://github.com/nmarticorena/robotics-toolbox-python.git"}
@@ -127,3 +131,5 @@ panda-python = ">=0.8.1, <0.9"
 
 [activation.env]
 PANDA_IP = "172.16.0.2"
+G1_IP = "192.168.123.164"
+G1_NETWORK_INTERFACE = "enx00e04c8800ba"
