@@ -129,6 +129,9 @@ class G1_29_ArmController:
             f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n"
         )
         logger_mp.info("Lock all joints except two arms...")
+        self.q_target = (
+            self.get_current_dual_arm_q()
+        )  # initialize arm target q to current q to avoid large initial jump
 
         arm_indices = set(member.value for member in G1_29_JointArmIndex)
         for id in G1_29_JointIndex:
