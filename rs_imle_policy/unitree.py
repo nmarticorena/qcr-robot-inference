@@ -1,27 +1,28 @@
-import numpy as np
 import threading
 import time
 from enum import IntEnum
 
+import logging_mp
+import numpy as np
 from unitree_sdk2py.core.channel import (
+    ChannelFactoryInitialize,
     ChannelPublisher,
     ChannelSubscriber,
-    ChannelFactoryInitialize,
 )  # dds
-from unitree_sdk2py.idl.unitree_hg.msg.dds_ import (
-    LowCmd_ as hg_LowCmd,
-    LowState_ as hg_LowState,
-)  # idl for g1, h1_2
-from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
-from unitree_sdk2py.utils.crc import CRC
-
+from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowCmd_, unitree_hg_msg_dds__LowCmd_
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import (
     LowCmd_ as go_LowCmd,
-    LowState_ as go_LowState,
 )  # idl for h1
-from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowCmd_
-
-import logging_mp
+from unitree_sdk2py.idl.unitree_go.msg.dds_ import (
+    LowState_ as go_LowState,
+)
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import (
+    LowCmd_ as hg_LowCmd,
+)  # idl for g1, h1_2
+from unitree_sdk2py.idl.unitree_hg.msg.dds_ import (
+    LowState_ as hg_LowState,
+)
+from unitree_sdk2py.utils.crc import CRC
 
 logger_mp = logging_mp.getLogger(__name__)
 
@@ -76,13 +77,14 @@ class DataBuffer:
 
 
 class G1_29_ArmController:
-    def __init__(self, motion_mode=False, simulation_mode=False):
+    def __init__(self, motion_mode=False, simulation_mode=False, sub_mode=False):
         logger_mp.info("Initialize G1_29_ArmController...")
         self.q_target = np.zeros(14)
         self.dq_target = np.zeros(14)
         self.tauff_target = np.zeros(14)
         self.motion_mode = motion_mode
         self.simulation_mode = simulation_mode
+        self.sub_mode = sub_mode
         self.kp_high = 300.0
         self.kd_high = 3.0
         self.kp_low = 80.0
@@ -128,8 +130,6 @@ class G1_29_ArmController:
         logger_mp.debug(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
 
         logger_mp.info("Lock all joints except two arms...")
-        with self.ctrl_lock:  # Initialize with current pos
-            self.q_target = self.get_current_dual_arm_q()
 
         arm_indices = set(member.value for member in G1_29_JointArmIndex)
         for id in G1_29_JointIndex:
@@ -151,11 +151,16 @@ class G1_29_ArmController:
             self.msg.motor_cmd[id].q = self.all_motor_q[id]
         logger_mp.info("Lock OK!")
 
-        # initialize publish thread
-        self.publish_thread = threading.Thread(target=self._ctrl_motor_state)
         self.ctrl_lock = threading.Lock()
-        self.publish_thread.daemon = True
-        self.publish_thread.start()
+        # with self.ctrl_lock:  # Initialize with current pos
+        #     self.q_target = self.get_current_dual_arm_q()
+        # initialize publish thread
+        if self.sub_mode:
+            logger_mp.info("Subscriber mode")
+        else:
+            self.publish_thread = threading.Thread(target=self._ctrl_motor_state)
+            self.publish_thread.daemon = True
+            self.publish_thread.start()
 
         logger_mp.info("Initialize G1_29_ArmController OK!")
 
@@ -1154,8 +1159,8 @@ class H1_JointIndex(IntEnum):
 
 
 if __name__ == "__main__":
-    from robot_arm_ik import G1_29_ArmIK
     import pinocchio as pin
+    from robot_arm_ik import G1_29_ArmIK
 
     ChannelFactoryInitialize(1)  # 0 for real robot, 1 for simulation
 

@@ -12,30 +12,27 @@ from dataclasses import dataclass
 from typing import Iterable, Sequence
 
 import numpy as np
+import pink
 import pinocchio as pin
 import qpsolvers
 import viser
-from scipy.spatial.transform import Rotation
-
-import pink
 from pink import solve_ik
 from pink.barriers import SelfCollisionBarrier
-from pink.tasks import FrameTask, PostureTask, DampingTask
+from pink.limits import AccelerationLimit
+from pink.tasks import DampingTask, FrameTask, PostureTask
 from pink.utils import process_collision_pairs
 from pink.visualization import start_viser_visualizer
+from scipy.spatial.transform import Rotation
 
 from rs_imle_policy.utils.collision_utils import force_convex_collision_geometry
 from rs_imle_policy.utils.urdf_utils import (
     BODY_JOINTS,
-    INSPIRE_FTP_HAND_JOINTS,
     DEX3_HAND_JOINTS,
     INSPIRE_DFQ_HAND_JOINTS,
+    INSPIRE_FTP_HAND_JOINTS,
 )
 
-
-DEFAULT_LOCKED_JOINTS = (
-    BODY_JOINTS + INSPIRE_FTP_HAND_JOINTS + DEX3_HAND_JOINTS + INSPIRE_DFQ_HAND_JOINTS
-)
+DEFAULT_LOCKED_JOINTS = BODY_JOINTS + INSPIRE_FTP_HAND_JOINTS + DEX3_HAND_JOINTS + INSPIRE_DFQ_HAND_JOINTS
 
 
 @dataclass
@@ -56,7 +53,6 @@ class G1ReducedPinkIK:
         use_free_flyer: bool = False,
         visualize: bool = False,
         enable_self_collision: bool = True,
-        collision_top_k: int = 10,
         spawn_visualizer: bool = True,
         q0: np.ndarray | None = None,
         pos_cost: float | Sequence[float] = 20.0,
@@ -67,7 +63,6 @@ class G1ReducedPinkIK:
         self.srdf_path = srdf_path
         self.visualize = visualize
         self.enable_self_collision = enable_self_collision
-        self.collision_top_k = collision_top_k
 
         root_joint = pin.JointModelFreeFlyer() if use_free_flyer else None
         self.robot = pin.RobotWrapper.BuildFromURDF(
@@ -81,9 +76,7 @@ class G1ReducedPinkIK:
         print(f"Converted {converted} collision geometries to convex hulls")
 
         if srdf_path and os.path.exists(srdf_path):
-            pin.removeCollisionPairs(
-                self.robot.model, self.robot.collision_model, srdf_path
-            )
+            pin.removeCollisionPairs(self.robot.model, self.robot.collision_model, srdf_path)
             self.robot.collision_data = process_collision_pairs(
                 self.robot.model,
                 self.robot.collision_model,
@@ -92,19 +85,14 @@ class G1ReducedPinkIK:
         else:
             self.robot.collision_data = pin.GeometryData(self.robot.collision_model)
 
-        joint_ids_to_lock = set(
-            [self.robot.model.getJointId(name) for name in locked_joints]
-        )
+        joint_ids_to_lock = set([self.robot.model.getJointId(name) for name in locked_joints])
 
         reference_configuration = pin.neutral(self.robot.model)
         self.robot = self.robot.buildReducedRobot(
             list_of_joints_to_lock=joint_ids_to_lock,
             reference_configuration=reference_configuration,
         )
-        if (
-            not hasattr(self.robot, "collision_data")
-            or self.robot.collision_data is None
-        ):
+        if not hasattr(self.robot, "collision_data") or self.robot.collision_data is None:
             self.robot.collision_data = pin.GeometryData(self.robot.collision_model)
 
         self._add_ee_frame("L_ee", "left_wrist_yaw_joint", ee_offset)
@@ -144,6 +132,20 @@ class G1ReducedPinkIK:
         self.damping_task = DampingTask(
             cost=1e-1,  # [cost] * [s] / [rad]
         )
+        self.acceleration_limit = AccelerationLimit(
+            self.robot.model,
+            np.full(
+                self.robot.model.nv,
+                100,  # [rad] / [s]^2
+            ),
+        )
+
+        # self.limits = [
+        #     self.configuration.model.configuration_limit,
+        #     self.configuration.model.velocity_limit,
+        #     # self.acceleration_limit,
+        # ]
+        self.limits = None
 
         # self.tasks = [self.left_task, self.right_task, self.posture_task, self.damping_task]
         self.tasks = [
@@ -162,18 +164,15 @@ class G1ReducedPinkIK:
         if enable_self_collision and len(self.robot.collision_model.collisionPairs) > 0:
             self.barriers = [
                 SelfCollisionBarrier(
-                    n_collision_pairs=10,
+                    n_collision_pairs=40,
                     gain=5.0,
                     safe_displacement_gain=0.1,
                     d_min=0.005,
                 )
             ]
 
-        self.solver = (
-            "daqp"
-            if "daqp" in qpsolvers.available_solvers
-            else qpsolvers.available_solvers[0]
-        )
+        # self.solver = "daqp" if "daqp" in qpsolvers.available_solvers else qpsolvers.available_solvers[0]
+        self.solver = "daqp"
         print(self.solver)
 
         self.viz = None
@@ -184,9 +183,7 @@ class G1ReducedPinkIK:
             self._add_handle(self.left_task, scale=0.12)
             self._add_handle(self.right_task, scale=0.12)
 
-    def _add_ee_frame(
-        self, frame_name: str, parent_joint_name: str, offset_x: float
-    ) -> None:
+    def _add_ee_frame(self, frame_name: str, parent_joint_name: str, offset_x: float) -> None:
         if self.robot.model.existFrame(frame_name):
             return
         parent_joint_id = self.robot.model.getJointId(parent_joint_name)
@@ -213,9 +210,7 @@ class G1ReducedPinkIK:
         def _on_update(evt: viser.TransformControlsEvent, task=task):
             target = task.transform_target_to_world
             target.translation = np.asarray(evt.target.position)
-            target.rotation = Rotation.from_quat(
-                evt.target.wxyz, scalar_first=True
-            ).as_matrix()
+            target.rotation = Rotation.from_quat(evt.target.wxyz, scalar_first=True).as_matrix()
 
         return handle
 
@@ -250,6 +245,7 @@ class G1ReducedPinkIK:
             damping=1e-2,
             safety_break=False,
             barriers=self.barriers,
+            limits=self.limits,
         )
         q = pin.integrate(self.robot.model, self.configuration.q, velocity * dt)
         return q.copy()
@@ -260,9 +256,7 @@ class G1ReducedPinkIK:
             q = self.step(dt=dt)
         return q
 
-    def solve_dq(
-        self, left: pin.SE3 | np.ndarray, right: pin.SE3 | np.ndarray
-    ) -> np.ndarray:
+    def solve_dq(self, left: pin.SE3 | np.ndarray, right: pin.SE3 | np.ndarray) -> np.ndarray:
         self.set_targets(left=left, right=right)
         velocity = solve_ik(
             self.configuration,
@@ -272,6 +266,7 @@ class G1ReducedPinkIK:
             damping=1e-2,
             safety_break=False,
             barriers=self.barriers,
+            limits=self.limits,
         )
 
         return velocity
