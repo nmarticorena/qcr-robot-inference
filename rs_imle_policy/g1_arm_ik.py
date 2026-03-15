@@ -14,6 +14,7 @@ from typing import Iterable, Sequence
 import numpy as np
 import pink
 import pinocchio as pin
+from ruckig import Ruckig, InputParameter, OutputParameter, Result, ControlInterface
 import qpsolvers
 import viser
 from pink import solve_ik
@@ -70,6 +71,11 @@ class G1ReducedPinkIK:
             self.mesh_dirs,
             root_joint,
         )
+
+        self.otg = Ruckig(self.robot.model.nv, 1/200)
+        self.input_otg = InputParameter(self.robot.model.nv)
+        self.output_otg = OutputParameter(self.robot.model.nv)
+        self.input_otg.control_interface = ControlInterface.Velocity
 
         self.robot.collision_model.addAllCollisionPairs()
         converted = force_convex_collision_geometry(self.robot)
