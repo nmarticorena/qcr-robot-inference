@@ -108,6 +108,7 @@ hatch-vcs = ">=0.5.0,<0.6"
 nodeenv = ">=1.10.0,<2"
 pink = ">=4.1.0"
 viser = ">=1.0.24,<2"
+nanobind = ">=2.12.0,<3"
 
 [pypi-options]
 no-build-isolation = true
@@ -125,6 +126,8 @@ spatialmath-python = {git = "https://github.com/nmarticorena/spatialmath-python.
 frankx = {git = "https://github.com/nmarticorena/frankx.git", rev = "legacy_version"}
 teleimager = {git = "https://github.com/nmarticorena/teleimager.git" , rev = "ed0c8d3"}
 unitree_sdk2py = {path = "../robot_forks/unitree_sdk2_python/", editable = true}
+ruckig = {version = "==0.15.3"}
+
 
 atomics = ">=1.0.3, <2"
 panda-python = ">=0.8.1, <0.9"
