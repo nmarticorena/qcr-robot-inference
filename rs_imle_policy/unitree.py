@@ -5,17 +5,10 @@ from enum import IntEnum
 import logging_mp
 import numpy as np
 from unitree_sdk2py.core.channel import (
-    ChannelFactoryInitialize,
     ChannelPublisher,
     ChannelSubscriber,
 )  # dds
-from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowCmd_, unitree_hg_msg_dds__LowCmd_
-from unitree_sdk2py.idl.unitree_go.msg.dds_ import (
-    LowCmd_ as go_LowCmd,
-)  # idl for h1
-from unitree_sdk2py.idl.unitree_go.msg.dds_ import (
-    LowState_ as go_LowState,
-)
+from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import (
     LowCmd_ as hg_LowCmd,
 )  # idl for g1, h1_2
@@ -23,6 +16,7 @@ from unitree_sdk2py.idl.unitree_hg.msg.dds_ import (
     LowState_ as hg_LowState,
 )
 from unitree_sdk2py.utils.crc import CRC
+from dataclasses import dataclass
 
 logger_mp = logging_mp.getLogger(__name__)
 
@@ -32,12 +26,11 @@ kTopicLowState = "rt/lowstate"
 
 G1_29_Num_Motors = 35
 
-
+@dataclass
 class MotorState:
-    def __init__(self):
-        self.q = None
-        self.dq = None
-
+    q: float|None = None
+    dq: float|None = None
+    ddq: float|None = None
 
 class G1_29_LowState:
     def __init__(self):
@@ -152,6 +145,7 @@ class G1_29_ArmController:
                 for id in range(G1_29_Num_Motors):
                     lowstate.motor_state[id].q = msg.motor_state[id].q
                     lowstate.motor_state[id].dq = msg.motor_state[id].dq
+                    lowstate.motor_state[id].ddq = msg.motor_state[id].ddq
                 self.lowstate_buffer.SetData(lowstate)
             time.sleep(0.002)
 
@@ -198,14 +192,23 @@ class G1_29_ArmController:
             # logger_mp.debug(f"arm_velocity_limit:{self.arm_velocity_limit}")
             # logger_mp.debug(f"sleep_time:{sleep_time}")
 
-    def ctrl_dual_arm(self, q_target, tauff_target):
-        """Set control target values q & tau of the left and right arm motors."""
+    def ctrl_dual_arm(self, q_target, tauff_target, dq_target=None):
+        """Set arm position, velocity, and torque references."""
+        q_target = np.asarray(q_target, dtype=float).copy()
+        tauff_target = np.asarray(tauff_target, dtype=float).copy()
+        if dq_target is None:
+            dq_target = np.zeros_like(q_target)
+        else:
+            dq_target = np.asarray(dq_target, dtype=float).copy()
         with self.ctrl_lock:
             self.q_target = q_target
+            self.dq_target = dq_target
             self.tauff_target = tauff_target
 
     def ctrl_dual_arm_vel(self, dq_target, tauff_target):
         """Set control target values q & tau of the left and right arm motors."""
+        dq_target = np.asarray(dq_target, dtype=float).copy()
+        tauff_target = np.asarray(tauff_target, dtype=float).copy()
         with self.ctrl_lock:
             self.dq_target = dq_target
             self.tauff_target = tauff_target
@@ -353,65 +356,3 @@ class G1_29_JointIndex(IntEnum):
     kNotUsedJoint5 = 34
 
 
-
-if __name__ == "__main__":
-    import pinocchio as pin
-    from robot_arm_ik import G1_29_ArmIK
-
-    ChannelFactoryInitialize(1)  # 0 for real robot, 1 for simulation
-
-    arm_ik = G1_29_ArmIK(Unit_Test=True, Visualization=False)
-    arm = G1_29_ArmController(simulation_mode=True)
-
-    # initial positon
-    L_tf_target = pin.SE3(
-        pin.Quaternion(1, 0, 0, 0),
-        np.array([0.25, +0.25, 0.1]),
-    )
-
-    R_tf_target = pin.SE3(
-        pin.Quaternion(1, 0, 0, 0),
-        np.array([0.25, -0.25, 0.1]),
-    )
-
-    rotation_speed = 0.005  # Rotation speed in radians per iteration
-
-    user_input = input("Please enter the start signal (enter 's' to start the subsequent program): \n")
-    if user_input.lower() == "s":
-        step = 0
-        arm.speed_gradual_max()
-        while True:
-            if step <= 120:
-                angle = rotation_speed * step
-                L_quat = pin.Quaternion(np.cos(angle / 2), 0, np.sin(angle / 2), 0)  # y axis
-                R_quat = pin.Quaternion(np.cos(angle / 2), 0, 0, np.sin(angle / 2))  # z axis
-
-                L_tf_target.translation += np.array([0.001, 0.001, 0.001])
-                R_tf_target.translation += np.array([0.001, -0.001, 0.001])
-            else:
-                angle = rotation_speed * (240 - step)
-                L_quat = pin.Quaternion(np.cos(angle / 2), 0, np.sin(angle / 2), 0)  # y axis
-                R_quat = pin.Quaternion(np.cos(angle / 2), 0, 0, np.sin(angle / 2))  # z axis
-
-                L_tf_target.translation -= np.array([0.001, 0.001, 0.001])
-                R_tf_target.translation -= np.array([0.001, -0.001, 0.001])
-
-            L_tf_target.rotation = L_quat.toRotationMatrix()
-            R_tf_target.rotation = R_quat.toRotationMatrix()
-
-            current_lr_arm_q = arm.get_current_dual_arm_q()
-            current_lr_arm_dq = arm.get_current_dual_arm_dq()
-
-            sol_q, sol_tauff = arm_ik.solve_ik(
-                L_tf_target.homogeneous,
-                R_tf_target.homogeneous,
-                current_lr_arm_q,
-                current_lr_arm_dq,
-            )
-
-            arm.ctrl_dual_arm(sol_q, sol_tauff)
-
-            step += 1
-            if step > 240:
-                step = 0
-            time.sleep(0.01)
