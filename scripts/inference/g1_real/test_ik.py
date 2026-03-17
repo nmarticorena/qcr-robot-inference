@@ -37,12 +37,8 @@ frecuecy = 200
 rec.spawn()
 
 ik = G1ReducedPinkIK(
-    urdf_path="assets/g1.urdf",
-    mesh_dirs=["assets/"],
-    srdf_path="assets/g1.srdf",
     visualize=True,
     spawn_visualizer=True,
-    enable_self_collision=True,
 )
 
 
@@ -66,13 +62,17 @@ while True:
     ti = time.time()
     q = controller.get_current_motor_q()
     q_arm = controller.get_current_dual_arm_q()
+
+    robot_gui.rec.log("state/arm_q", rr.Scalars(q_arm.copy()))
     q_left_arm = q_arm[:7]
     q_right_arm = q_arm[7:14]
 
     dq_arm = controller.get_current_dual_arm_dq()
     ik.configuration.update(q_arm.copy())
     ik.viz.display(q_arm.copy())
-    q_sol = ik.solve(dt=1 / 200, n_steps=1)
+    q_sol = ik.solve(dt=1 / frecuecy, n_steps=1)
+
+    robot_gui.rec.log("state/ik_q_sol", rr.Scalars(q_sol.copy()))
     full_q_sol = np.zeros(29)
     full_q_sol[15:29] = q_sol
     robot_sol.log(full_q_sol)
