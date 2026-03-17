@@ -133,5 +133,18 @@ INSPIRE_DFQ_HAND_JOINTS = [
     "R_pinky_intermediate_joint",
 ]
 
+LEG_LINKS = [
+    "left_hip_pitch_link",
+    "left_hip_roll_link",
+    "left_hip_yaw_link",
+    "left_knee_link",
+    "left_ankle_roll_link",
+    "right_hip_pitch_link",
+    "right_hip_roll_link",
+    "right_hip_yaw_link",
+    "right_knee_link",
+    "right_ankle_roll_link",
+]
+
 
 DEFAULT_LOCKED_JOINTS = BODY_JOINTS + INSPIRE_FTP_HAND_JOINTS + DEX3_HAND_JOINTS + INSPIRE_DFQ_HAND_JOINTS
