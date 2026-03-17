@@ -5,7 +5,7 @@ the collision geometry where approximated by convex hulls
 
 import os
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Optional
 
 import numpy as np
 import pink
@@ -20,7 +20,7 @@ from pink.visualization import start_viser_visualizer
 from scipy.spatial.transform import Rotation
 
 from rs_imle_policy.utils.collision_utils import force_convex_collision_geometry
-from rs_imle_policy.utils.urdf_utils import DEFAULT_LOCKED_JOINTS
+from rs_imle_policy.utils.urdf_utils import DEFAULT_LOCKED_JOINTS, LEG_LINKS
 from rs_imle_policy.configs.g1_configs import G1IKConfig, PositionBarrierBounds
 
 
@@ -79,6 +79,9 @@ class G1ReducedPinkIK:
         self.robot.collision_model.addAllCollisionPairs()
         converted = force_convex_collision_geometry(self.robot)
         print(f"Converted {converted} collision geometries to convex hulls")
+        self._remove_collision_geometry(LEG_LINKS)
+        self.robot.collision_model.addAllCollisionPairs()  # rebuild pairs without legs
+
         if srdf_path and os.path.exists(srdf_path):
             pin.removeCollisionPairs(self.robot.model, self.robot.collision_model, srdf_path)
             self.robot.collision_data = process_collision_pairs(
@@ -96,8 +99,20 @@ class G1ReducedPinkIK:
             list_of_joints_to_lock=joint_ids_to_lock,
             reference_configuration=reference_configuration,
         )
+
         if not hasattr(self.robot, "collision_data") or self.robot.collision_data is None:
             self.robot.collision_data = pin.GeometryData(self.robot.collision_model)
+
+    def _remove_collision_geometry(self, links_to_remove: Iterable[str]) -> None:
+        """Remove all geometry objects associated with given link names."""
+        names_to_remove = [
+            g.name
+            for g in self.robot.collision_model.geometryObjects
+            if any(link in g.name for link in links_to_remove)
+        ]
+        for name in names_to_remove:
+            self.robot.collision_model.removeGeometryObject(name)
+        print(f"Removed {len(names_to_remove)} leg collision geometries")
 
     def _setup_ee_frames(self, ee_offset: float):
         self._add_ee_frame("L_ee", "left_wrist_yaw_joint", ee_offset)
@@ -146,10 +161,10 @@ class G1ReducedPinkIK:
             print("Include self-collision avoidance barrier")
             self.barriers.append(
                 SelfCollisionBarrier(
-                    n_collision_pairs=10,
+                    n_collision_pairs=len(self.robot.collision_model.collisionPairs),
                     gain=5.0,
-                    safe_displacement_gain=0.1,
-                    d_min=0.005,
+                    safe_displacement_gain=1.0,
+                    d_min=0.01,
                 )
             )
 
@@ -288,9 +303,10 @@ class G1ReducedPinkIK:
             q = self.step(dt=dt)
         return q
 
-    def solve_dq(self, q: np.ndarray, dt: float = 0.01) -> tuple[np.ndarray, np.ndarray]:
+    def solve_dq(self, q: Optional[np.ndarray] = None, dt: float = 0.01) -> tuple[np.ndarray, np.ndarray]:
         """Solve for dq given a configuration q, Returns the new configuration and the velocity."""
-        self.configuration.q = q.copy()
+        if q is not None:
+            self.configuration.update(q)
         velocity = solve_ik(
             self.configuration,
             self.tasks,
@@ -369,6 +385,43 @@ class G1ReducedPinkIK:
             errors_norm[type(barrier).__name__ + "_error"] = barrier.gain * norm_error
 
         return errors, errors_norm
+
+    def get_closest_collision_pairs(
+        self,
+        q: np.ndarray | None = None,
+        n: int = 20,
+    ) -> list[tuple[float, str, str]]:
+        """
+        Return the n closest collision pairs and their distances.
+        Useful for diagnosing self-collision barrier noise.
+
+        Args:
+            q: Configuration to evaluate. If None, uses self.configuration.q.
+            n: Number of closest pairs to return.
+
+        Returns:
+            List of (distance, link_name_1, link_name_2) sorted by distance ascending.
+        """
+        if q is None:
+            q = self.configuration.q
+
+        q = np.asarray(q).copy()
+        data = self.robot.model.createData()
+        geom_data = pin.GeometryData(self.robot.collision_model)
+
+        pin.forwardKinematics(self.robot.model, data, q)
+        pin.updateGeometryPlacements(self.robot.model, data, self.robot.collision_model, geom_data)
+        pin.computeDistances(self.robot.collision_model, geom_data)
+
+        results = []
+        for idx, pair in enumerate(self.robot.collision_model.collisionPairs):
+            dist = geom_data.distanceResults[idx].min_distance
+            name1 = self.robot.collision_model.geometryObjects[pair.first].name
+            name2 = self.robot.collision_model.geometryObjects[pair.second].name
+            results.append((dist, name1, name2))
+
+        results.sort(key=lambda x: x[0])
+        return results[:n]
 
     @staticmethod
     def _as_se3(T: pin.SE3 | np.ndarray) -> pin.SE3:
