@@ -24,7 +24,7 @@ class PositionBarrierBounds:
 class G1IKConfig:
     urdf_path: str = "assets/g1.urdf"
     # Path for urdf
-    srdf_path: str = "assets/g1.srdf"
+    srdf_path: str = "assets/g1_arms.srdf"
     # Path for srdf
 
     ee_offset: float = 0.05
