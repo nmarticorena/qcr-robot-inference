@@ -48,9 +48,7 @@ class VideoRecorder:
             path = Path(path)
         assert self.writer is None
         # print(self.get_command(path))
-        self.writer = sp.Popen(
-            shlex.split(self.get_command(path)), stdout=sp.DEVNULL, stdin=sp.PIPE
-        )
+        self.writer = sp.Popen(shlex.split(self.get_command(path)), stdout=sp.DEVNULL, stdin=sp.PIPE)
 
     def record_frame(self, data: np.ndarray):
         assert self.writer is not None

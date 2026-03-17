@@ -20,9 +20,7 @@ from pink.visualization import start_viser_visualizer
 from scipy.spatial.transform import Rotation
 
 from rs_imle_policy.utils.collision_utils import force_convex_collision_geometry
-from rs_imle_policy.utils.urdf_utils import (
-    DEFAULT_LOCKED_JOINTS
-)
+from rs_imle_policy.utils.urdf_utils import DEFAULT_LOCKED_JOINTS
 from rs_imle_policy.configs.g1_configs import G1IKConfig, PositionBarrierBounds
 
 
@@ -30,7 +28,6 @@ from rs_imle_policy.configs.g1_configs import G1IKConfig, PositionBarrierBounds
 class Targets:
     left: pin.SE3
     right: pin.SE3
-
 
 
 class G1ReducedPinkIK:
@@ -51,12 +48,8 @@ class G1ReducedPinkIK:
         self._setup_robot(locked_joints)
         self._setup_ee_frames(config.ee_offset)
 
-        self.left_eef_position_bounds = (
-            left_eef_position_bounds or self._default_position_bounds()
-        )
-        self.right_eef_position_bounds = (
-            right_eef_position_bounds or self._default_position_bounds()
-        )
+        self.left_eef_position_bounds = left_eef_position_bounds or self._default_position_bounds()
+        self.right_eef_position_bounds = right_eef_position_bounds or self._default_position_bounds()
         if q0 is None:
             q0 = pin.neutral(self.robot.model)
 
@@ -68,8 +61,6 @@ class G1ReducedPinkIK:
             collision_data=self.robot.collision_data,
         )
 
-
-
         self._setup_tasks()
         self._setup_barriers()
         self._setup_limits()
@@ -77,14 +68,13 @@ class G1ReducedPinkIK:
         if visualize:
             self._setup_visualizer(spawn_visualizer)
 
-
     def _setup_robot(self, locked_joints: Iterable[str]):
         srdf_path = self.config.srdf_path
         print("Loading robot model")
         self.robot = pin.RobotWrapper.BuildFromURDF(
             self.config.urdf_path,
             ["assets/"],
-            None, # Not to use a freeflyer base
+            None,  # Not to use a freeflyer base
         )
         self.robot.collision_model.addAllCollisionPairs()
         converted = force_convex_collision_geometry(self.robot)
@@ -112,7 +102,7 @@ class G1ReducedPinkIK:
     def _setup_ee_frames(self, ee_offset: float):
         self._add_ee_frame("L_ee", "left_wrist_yaw_joint", ee_offset)
         self._add_ee_frame("R_ee", "right_wrist_yaw_joint", ee_offset)
-        self.robot.data = self.robot.model.createData() # synch pin model
+        self.robot.data = self.robot.model.createData()  # synch pin model
         self.left_ee_id = self.robot.model.getFrameId("L_ee")
         self.right_ee_id = self.robot.model.getFrameId("R_ee")
 
@@ -133,7 +123,7 @@ class G1ReducedPinkIK:
             self.tasks.extend([self.left_task, self.right_task])
         if self.config.posture_cost > 0:
             print("Include posture task")
-            self.posture_task = PostureTask(cost = self.config.posture_cost)
+            self.posture_task = PostureTask(cost=self.config.posture_cost)
             self.tasks.append(self.posture_task)
         if self.config.damping_cost > 0:
             print("Include damping task")
@@ -165,22 +155,24 @@ class G1ReducedPinkIK:
 
         if self.config.box_barrier_gain > 0:
             print("Include EE position barriers")
-            self.barriers.extend([
-                PositionBarrier(
-                    "L_ee",
-                    p_min=self.left_eef_position_bounds.p_min,
-                    p_max=self.left_eef_position_bounds.p_max,
-                    gain=self.config.box_barrier_gain,
-                    safe_displacement_gain=self.config.box_displacement_gain,
-                ),
-                PositionBarrier(
-                    "R_ee",
-                    p_min=self.right_eef_position_bounds.p_min,
-                    p_max=self.right_eef_position_bounds.p_max,
-                    gain=self.config.box_barrier_gain,
-                    safe_displacement_gain=self.config.box_displacement_gain,
-                ),
-                ])
+            self.barriers.extend(
+                [
+                    PositionBarrier(
+                        "L_ee",
+                        p_min=self.left_eef_position_bounds.p_min,
+                        p_max=self.left_eef_position_bounds.p_max,
+                        gain=self.config.box_barrier_gain,
+                        safe_displacement_gain=self.config.box_displacement_gain,
+                    ),
+                    PositionBarrier(
+                        "R_ee",
+                        p_min=self.right_eef_position_bounds.p_min,
+                        p_max=self.right_eef_position_bounds.p_max,
+                        gain=self.config.box_barrier_gain,
+                        safe_displacement_gain=self.config.box_displacement_gain,
+                    ),
+                ]
+            )
 
     def _setup_limits(self):
         self.limits = [self.configuration.model.configuration_limit, self.configuration.model.velocity_limit]
@@ -199,8 +191,9 @@ class G1ReducedPinkIK:
         self._add_handle(self.left_task, scale=0.12)
         self._add_handle(self.right_task, scale=0.12)
         self._add_position_barrier_visual(self.viz.viewer, "L_ee", self.left_eef_position_bounds, color=(255, 120, 120))
-        self._add_position_barrier_visual(self.viz.viewer, "R_ee", self.right_eef_position_bounds, color=(120, 160, 255))
-
+        self._add_position_barrier_visual(
+            self.viz.viewer, "R_ee", self.right_eef_position_bounds, color=(120, 160, 255)
+        )
 
     def _add_ee_frame(self, frame_name: str, parent_joint_name: str, offset_x: float) -> None:
         if self.robot.model.existFrame(frame_name):
@@ -214,7 +207,6 @@ class G1ReducedPinkIK:
                 pin.FrameType.OP_FRAME,
             )
         )
-
 
     def _add_handle(self, task: FrameTask, scale: float = 0.12):
         assert task.transform_target_to_world is not None, "Expected task.transform_target_to_world to be initialized"
@@ -312,8 +304,6 @@ class G1ReducedPinkIK:
         q = pin.integrate(self.robot.model, self.configuration.q, velocity * dt)
         return q, velocity
 
-
-
     def get_ee_poses(
         self,
         q: np.ndarray | None = None,
@@ -350,8 +340,8 @@ class G1ReducedPinkIK:
             errors_norm: dict mapping task/barrier name to its cost-weighted error
                 (e.g. position error times position cost)
         """
-        errors = {} # raw error
-        errors_norm = {} # error times the cost
+        errors = {}  # raw error
+        errors_norm = {}  # error times the cost
         for task in self.tasks:
             if isinstance(task, FrameTask):
                 error = task.compute_error(self.configuration)
@@ -399,4 +389,3 @@ class G1ReducedPinkIK:
             p_min=np.array([x_bounds[0], y_bounds[0], z_bounds[0]], dtype=float),
             p_max=np.array([x_bounds[1], y_bounds[1], z_bounds[1]], dtype=float),
         )
-

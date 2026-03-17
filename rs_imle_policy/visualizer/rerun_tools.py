@@ -8,9 +8,7 @@ import numpy as np
 
 
 class ReRunRobot:
-    def __init__(
-        self, robot: rtb.Robot, prefix: str, alpha: Optional[float] = None
-    ) -> None:
+    def __init__(self, robot: rtb.Robot, prefix: str, alpha: Optional[float] = None) -> None:
         self.robot = robot
         self.name = f"{prefix}/{robot.name}"
         self.alpha = alpha
@@ -30,9 +28,7 @@ class ReRunRobot:
                 rr.Transform3D(translation=O_T_ix[:3, 3], mat3x3=O_T_ix[:3, :3]),
             )
 
-    def log_pose(
-        self, position: NDArray, quaternion: NDArray, name: str = "pose"
-    ) -> None:
+    def log_pose(self, position: NDArray, quaternion: NDArray, name: str = "pose") -> None:
         """
         Log a 3D pose to rerun
         position: [x, y, z]

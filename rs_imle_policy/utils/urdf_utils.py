@@ -31,11 +31,7 @@ def get_finger_joints(model: pin.Model):
     """
     finger_keywords = ["index", "middle", "ring", "little", "thumb"]
 
-    finger_joints = [
-        model.names[i]
-        for i in range(model.njoints)
-        if any(k in model.names[i] for k in finger_keywords)
-    ]
+    finger_joints = [model.names[i] for i in range(model.njoints) if any(k in model.names[i] for k in finger_keywords)]
 
     return finger_joints
 
@@ -136,3 +132,6 @@ INSPIRE_DFQ_HAND_JOINTS = [
     "R_pinky_proximal_joint",
     "R_pinky_intermediate_joint",
 ]
+
+
+DEFAULT_LOCKED_JOINTS = BODY_JOINTS + INSPIRE_FTP_HAND_JOINTS + DEX3_HAND_JOINTS + INSPIRE_DFQ_HAND_JOINTS

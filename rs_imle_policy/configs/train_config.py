@@ -67,9 +67,7 @@ class VisionConfig:
     img_shape: tuple[int, int] = (240, 320)
 
     def __post_init__(self):
-        self.cameras_params: list[CameraConfig] = [
-            default_cameras[cam] for cam in self.cameras
-        ]
+        self.cameras_params: list[CameraConfig] = [default_cameras[cam] for cam in self.cameras]
 
 
 @dataclass

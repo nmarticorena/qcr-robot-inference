@@ -70,27 +70,19 @@ class BaseDataset(Dataset, abc.ABC):
             with open(self.dataset_path / "stats.pkl", "wb") as f:
                 pkl.dump(dict(self.stats), f)
 
-        self.indices = self.create_sample_indices(
-            self.rlds, sequence_length=self.pred_horizon
-        )
+        self.indices = self.create_sample_indices(self.rlds, sequence_length=self.pred_horizon)
         self.normalize_rlds()
 
         self.cached_dataset = h5py.File(self.dataset_path / "images.h5", "r")
-        assert self.cached_dataset is not None, (
-            "Failed to load cached dataset from HDF5 file."
-        )
+        assert self.cached_dataset is not None, "Failed to load cached dataset from HDF5 file."
 
         if not visualize:
             self.low_dim_obs_shape = self.rlds[0]["state"].shape[1]
-            self.img_shape = vision_config.vision_features_dim * len(
-                vision_config.cameras
-            )
+            self.img_shape = vision_config.vision_features_dim * len(vision_config.cameras)
             self.obs_shape = self.low_dim_obs_shape + self.img_shape
             self.action_shape = self.rlds[0]["action"].shape[1]
 
-    def get_relative_transform(
-        self, current_pose: List[NDArray], next_pose: List[NDArray]
-    ) -> List[sm.SE3]:
+    def get_relative_transform(self, current_pose: List[NDArray], next_pose: List[NDArray]) -> List[sm.SE3]:
         """Compute relative transformation between consecutive poses.
 
         Args:
@@ -103,9 +95,7 @@ class BaseDataset(Dataset, abc.ABC):
         current_pose_sm = [sm.SE3(pose) for pose in current_pose]
         next_pose_sm = [sm.SE3(pose) for pose in next_pose]
 
-        relative_transform = [
-            current.inv() * nxt for current, nxt in zip(current_pose_sm, next_pose_sm)
-        ]
+        relative_transform = [current.inv() * nxt for current, nxt in zip(current_pose_sm, next_pose_sm)]
         return relative_transform
 
     @abc.abstractmethod
@@ -129,13 +119,9 @@ class BaseDataset(Dataset, abc.ABC):
         """Apply normalization to every key in each episode."""
         for episode in self.rlds:
             for key in self.rlds[episode]:
-                self.rlds[episode][key] = normalize_data(
-                    np.array(self.rlds[episode][key]), self.stats[key]
-                )
+                self.rlds[episode][key] = normalize_data(np.array(self.rlds[episode][key]), self.stats[key])
 
-    def create_sample_indices(
-        self, rlds_dataset: dict, sequence_length: int = 16
-    ) -> NDArray:
+    def create_sample_indices(self, rlds_dataset: dict, sequence_length: int = 16) -> NDArray:
         """Create valid sample indices for the dataset.
 
         Args:
@@ -194,25 +180,17 @@ class BaseDataset(Dataset, abc.ABC):
             tensor: Image tensor of shape (16, 3, 216, 288)
         """
         # Ensure the input tensor is in the right shape
-        assert tensor.shape == (16, 3, 216, 288), (
-            "Tensor should have shape (16, 3, 216, 288)"
-        )
+        assert tensor.shape == (16, 3, 216, 288), "Tensor should have shape (16, 3, 216, 288)"
 
         # Create a grid of images in a single row
-        grid_img = torchvision.utils.make_grid(
-            tensor, nrow=16
-        )  # Arrange 16 images in a single row
+        grid_img = torchvision.utils.make_grid(tensor, nrow=16)  # Arrange 16 images in a single row
         # Convert the tensor to a numpy array for displaying
         plt.figure(figsize=(20, 5))  # Adjust figure size if necessary
-        plt.imshow(
-            grid_img.permute(1, 2, 0).cpu().numpy()
-        )  # Permute to get (H, W, C) for display
+        plt.imshow(grid_img.permute(1, 2, 0).cpu().numpy())  # Permute to get (H, W, C) for display
         plt.axis("off")  # Hide axis
         plt.show()
 
-    def sample_sequence(
-        self, episode: int, buffer_start_idx: int, buffer_end_idx: int
-    ) -> dict:
+    def sample_sequence(self, episode: int, buffer_start_idx: int, buffer_end_idx: int) -> dict:
         """Sample a sequence from an episode.
 
         Args:
@@ -251,9 +229,7 @@ class BaseDataset(Dataset, abc.ABC):
         episode, buffer_start_idx, buffer_end_idx = self.indices[idx]
         seq = self.sample_sequence(episode, buffer_start_idx, buffer_end_idx)
 
-        frames = {
-            f"frame_{key}": seq["frames"][key] for key in self.vision_config.cameras
-        }
+        frames = {f"frame_{key}": seq["frames"][key] for key in self.vision_config.cameras}
 
         # Convert to tensors
         state = torch.tensor(seq["state"], dtype=torch.float32)

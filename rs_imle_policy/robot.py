@@ -303,13 +303,12 @@ class PandaPyRobot:
         return np.concatenate([pos, rot, [width]])
 
     def get_robot_state(self):
-        """Get the full robot state 
+        """Get the full robot state
 
         Returns:
             Robot state object from panda_py
         """
         return self.robot.get_state()
-
 
     def set_next_waypoints(self, translations, orientations, relative: bool = False):
         """Set the next waypoints for the robot to follow.

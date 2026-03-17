@@ -7,6 +7,7 @@ Configurations for the G1 Pink ik solver
 if any value is 0.0 the task will not be added
 """
 
+
 @dataclass(frozen=True)
 class PositionBarrierBounds:
     p_min: np.ndarray
@@ -19,7 +20,6 @@ class PositionBarrierBounds:
             raise ValueError(f"Expected p_min < p_max, got p_min={self.p_min}, p_max={self.p_max}")
 
 
-
 @dataclass
 class G1IKConfig:
     urdf_path: str = "assets/g1.urdf"
@@ -27,12 +27,11 @@ class G1IKConfig:
     srdf_path: str = "assets/g1.srdf"
     # Path for srdf
 
-
     ee_offset: float = 0.05
     # Displacement between the wrist and the centre of the hands
 
     # Tasks costs
-    pos_cost: float = 20.
+    pos_cost: float = 20.0
     # Cost of position error
     ori_cost: float = 5.0
     # Cost of rotation error
@@ -44,11 +43,10 @@ class G1IKConfig:
     # Barriers
     self_collision_avoidance: bool = True
     # Whether to add self-collision avoidance task
-    box_barrier_gain: float = 10.
+    box_barrier_gain: float = 10.0
     # Gain for box barrier task
-    box_displacement_gain: float = 1.
+    box_displacement_gain: float = 1.0
     # Gain for box displacement task
-
 
     # Limits
     acceleration_limit: Optional[float] = 10.0
@@ -56,5 +54,3 @@ class G1IKConfig:
 
     # QP configs
     solver: str = "daqp"
-
-

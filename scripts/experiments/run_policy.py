@@ -28,7 +28,12 @@ if isinstance(config.model, RSIMLE):
 rr.init("Robot Inference ", recording_id=exp_name)
 os.makedirs(f"saved_evaluation_media/{exp_name}", exist_ok=True)
 rr.save(f"saved_evaluation_media/{exp_name}/rerun_recording.rrd")
-subprocess.Popen(["rerun", f"saved_evaluation_media/{exp_name}/rerun_recording.rrd"], shell = False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+subprocess.Popen(
+    ["rerun", f"saved_evaluation_media/{exp_name}/rerun_recording.rrd"],
+    shell=False,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+)
 
 controller = RobotInferenceController(config, eval_name=exp_name, timeout=args.timeout, dry_run=args.dry_run)
 

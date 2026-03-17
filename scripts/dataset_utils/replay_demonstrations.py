@@ -48,27 +48,19 @@ for episode in rlds:
         X_BE_gello = env.robot.fkine(np.array(gello_q), "panda_link8")
 
         # create a pose at 0,0,0
-        orien = unnormalize_data(
-            ep_data["action_orien"][idx], dataset.stats["action_orien"]
-        )
+        orien = unnormalize_data(ep_data["action_orien"][idx], dataset.stats["action_orien"])
         t = unnormalize_data(ep_data["action_pos"][idx], dataset.stats["action_pos"])
 
         pose = utils.pos_rot_to_se3(t, orien)
         action_pos.T = pose
 
-        orien = unnormalize_data(
-            ep_data["robot_orien"][idx], dataset.stats["robot_orien"]
-        )
+        orien = unnormalize_data(ep_data["robot_orien"][idx], dataset.stats["robot_orien"])
         t = unnormalize_data(ep_data["robot_pos"][idx], dataset.stats["robot_pos"])
         r_pos = utils.pos_rot_to_se3(t, orien)
         robot_pos.T = r_pos
 
-        arrow_length = unnormalize_data(
-            ep_data["relative_pos"][idx], dataset.stats["relative_pos"]
-        )
-        arrow_dir = unnormalize_data(
-            ep_data["relative_orien"][idx], dataset.stats["relative_orien"]
-        )
+        arrow_length = unnormalize_data(ep_data["relative_pos"][idx], dataset.stats["relative_pos"])
+        arrow_dir = unnormalize_data(ep_data["relative_orien"][idx], dataset.stats["relative_orien"])
 
         pose_2 = utils.pos_rot_to_se3(arrow_length, arrow_dir)
         action_pose_2.T = r_pos * pose_2

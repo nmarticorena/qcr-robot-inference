@@ -26,11 +26,13 @@ kTopicLowState = "rt/lowstate"
 
 G1_29_Num_Motors = 35
 
+
 @dataclass
 class MotorState:
-    q: float|None = None
-    dq: float|None = None
-    ddq: float|None = None
+    q: float | None = None
+    dq: float | None = None
+    ddq: float | None = None
+
 
 class G1_29_LowState:
     def __init__(self):
@@ -175,7 +177,8 @@ class G1_29_ArmController:
 
             for idx, id in enumerate(G1_29_JointArmIndex):
                 self.msg.motor_cmd[id].q = cliped_arm_q_target[idx]
-                self.msg.motor_cmd[id].dq = arm_dq_target[idx]
+                # self.msg.motor_cmd[id].dq = arm_dq_target[idx]
+                self.msg.motor_cmd[id].dq = 0
                 self.msg.motor_cmd[id].tau = arm_tauff_target[idx]
 
             self.msg.crc = self.crc.Crc(self.msg)
@@ -228,6 +231,17 @@ class G1_29_ArmController:
     def get_current_dual_arm_dq(self):
         """Return current state dq of the left and right arm motors."""
         return np.array([self.lowstate_buffer.GetData().motor_state[id].dq for id in G1_29_JointArmIndex])
+
+    def get_current_dual_arm_ddq(self):
+        """Return current state ddq of the left and right arm motors."""
+        return np.array([self.lowstate_buffer.GetData().motor_state[id].ddq for id in G1_29_JointArmIndex])
+
+    def get_current_dual_arm(self):
+        """Return current state of the left and right arm motors, including q, dq, and ddq."""
+        q = self.get_current_dual_arm_q()
+        dq = self.get_current_dual_arm_dq()
+        ddq = self.get_current_dual_arm_ddq()
+        return q, dq, ddq
 
     def ctrl_dual_arm_go_home(self):
         """Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero."""
@@ -354,5 +368,3 @@ class G1_29_JointIndex(IntEnum):
     kNotUsedJoint3 = 32
     kNotUsedJoint4 = 33
     kNotUsedJoint5 = 34
-
-

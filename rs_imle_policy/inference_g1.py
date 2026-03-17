@@ -138,9 +138,7 @@ class G1ArmsInferenceController:
         for ix, cam_name in enumerate(self.config.data.vision.cameras):
             frames[cam_name] = images[ix]["color"]
             self.all_frames[cam_name].append(images[ix]["color"])
-            self.rerun_gui.rec.log(
-                "cameras/{}".format(cam_name), rr.Image(frames[cam_name]).compress(80)
-            )
+            self.rerun_gui.rec.log("cameras/{}".format(cam_name), rr.Image(frames[cam_name]).compress(80))
 
         self.rerun_gui.log(state.q)
         low_level_state = state.build_low_level_state()
@@ -190,9 +188,7 @@ class G1ArmsInferenceController:
             for cam_name in cams:
                 image = np.stack([x[cam_name] for x in obs_deque])
                 input_image = torch.stack([self.policy.transform(img) for img in image])
-                feat = encoders[f"vision_encoder_{cam_name}"](
-                    input_image.to(device, dtype)
-                )
+                feat = encoders[f"vision_encoder_{cam_name}"](input_image.to(device, dtype))
                 image_features.append(feat)
 
         obs_features = torch.cat(image_features + [nagent_pos], dim=-1)
@@ -237,12 +233,8 @@ class G1ArmsInferenceController:
         r_r = action[:, 12:18]
         progress = action[:, 18:]
 
-        left_poses = transforms_utils.pos_rot_to_se3(
-            torch.from_numpy(l_t), torch.from_numpy(l_r)
-        )
-        right_poses = transforms_utils.pos_rot_to_se3(
-            torch.from_numpy(r_t), torch.from_numpy(r_r)
-        )
+        left_poses = transforms_utils.pos_rot_to_se3(torch.from_numpy(l_t), torch.from_numpy(l_r))
+        right_poses = transforms_utils.pos_rot_to_se3(torch.from_numpy(r_t), torch.from_numpy(r_r))
 
         return left_poses, right_poses, progress
 
@@ -331,9 +323,7 @@ class G1RobotInterface:
     def __init__(self, simulation: bool = True):
         dds_domain_id = 1 if simulation else 0
         ChannelFactoryInitialize(id=dds_domain_id)  # dds domain id
-        self.controller = G1_29_ArmController(
-            motion_mode=False, simulation_mode=simulation
-        )
+        self.controller = G1_29_ArmController(motion_mode=False, simulation_mode=simulation)
         # self.q0 = self.controller.get_current_dual_arm_q()
         self.q0 = np.zeros_like(self.controller.get_current_dual_arm_q())
         self.ik_solver = G1ReducedPinkIK(

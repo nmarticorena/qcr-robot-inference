@@ -92,8 +92,7 @@ class Policy:
                 name=self.config.training_params.lr_scheduler_profile,
                 optimizer=self.optimizer,
                 num_warmup_steps=self.config.training_params.num_warmup_steps,
-                num_training_steps=len(self.dataloader)
-                * self.config.training_params.num_epochs,
+                num_training_steps=len(self.dataloader) * self.config.training_params.num_epochs,
             )
 
             print("Training Mode.")
@@ -156,10 +155,7 @@ class Policy:
             ModuleDict containing vision encoders and policy network
         """
         cameras = self.config.data.vision.cameras
-        vision_encoders = {
-            f"vision_encoder_{camera}": replace_bn_with_gn(get_resnet("resnet18"))
-            for camera in cameras
-        }
+        vision_encoders = {f"vision_encoder_{camera}": replace_bn_with_gn(get_resnet("resnet18")) for camera in cameras}
 
         if isinstance(self.config.model, Diffusion):
             noise_pred_net = DiffusionConditionalUnet1D(

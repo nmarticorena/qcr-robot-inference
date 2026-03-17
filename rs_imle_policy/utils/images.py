@@ -48,17 +48,11 @@ def adjust_hsv_ranges(image_path: str):
 
     # Create sliders
     s_h_low = Slider(ax_h_low, "H Low", 0, 255, valinit=hsv_ranges["H_low"], valstep=1)
-    s_h_high = Slider(
-        ax_h_high, "H High", 0, 255, valinit=hsv_ranges["H_high"], valstep=1
-    )
+    s_h_high = Slider(ax_h_high, "H High", 0, 255, valinit=hsv_ranges["H_high"], valstep=1)
     s_s_low = Slider(ax_s_low, "S Low", 0, 255, valinit=hsv_ranges["S_low"], valstep=1)
-    s_s_high = Slider(
-        ax_s_high, "S High", 0, 255, valinit=hsv_ranges["S_high"], valstep=1
-    )
+    s_s_high = Slider(ax_s_high, "S High", 0, 255, valinit=hsv_ranges["S_high"], valstep=1)
     s_v_low = Slider(ax_v_low, "V Low", 0, 255, valinit=hsv_ranges["V_low"], valstep=1)
-    s_v_high = Slider(
-        ax_v_high, "V High", 0, 255, valinit=hsv_ranges["V_high"], valstep=1
-    )
+    s_v_high = Slider(ax_v_high, "V High", 0, 255, valinit=hsv_ranges["V_high"], valstep=1)
 
     # Update function for sliders
     def update(val):
@@ -98,28 +92,18 @@ def adjust_hsv_ranges(image_path: str):
 def cache_pims_video(dataset_path):
     # Open an HDF5 file in write mode
     with h5py.File("t_block_1.h5", "w") as h5f:
-        episodes = sorted(
-            os.listdir(os.path.join(dataset_path, "episodes")), key=lambda x: int(x)
-        )
+        episodes = sorted(os.listdir(os.path.join(dataset_path, "episodes")), key=lambda x: int(x))
         for episode in tqdm.tqdm(episodes):
-            video_wrist = os.path.join(
-                dataset_path, "episodes", episode, "video", "0.mp4"
-            )
-            video_side = os.path.join(
-                dataset_path, "episodes", episode, "video", "2.mp4"
-            )
+            video_wrist = os.path.join(dataset_path, "episodes", episode, "video", "0.mp4")
+            video_side = os.path.join(dataset_path, "episodes", episode, "video", "2.mp4")
 
             # Use PIMS to read the video files
             pims_video_wrist = pims.PyAVReaderIndexed(video_wrist)
             pims_video_side = pims.PyAVReaderIndexed(video_side)
 
             # Convert frames to NumPy arrays and resize
-            wrist_frames = np.array(
-                [cv2.resize(np.array(frame), (320, 240)) for frame in pims_video_wrist]
-            )
-            side_frames = np.array(
-                [cv2.resize(np.array(frame), (320, 240)) for frame in pims_video_side]
-            )
+            wrist_frames = np.array([cv2.resize(np.array(frame), (320, 240)) for frame in pims_video_wrist])
+            side_frames = np.array([cv2.resize(np.array(frame), (320, 240)) for frame in pims_video_side])
 
             # Create a group for each episode in HDF5
             grp = h5f.create_group(f"{episode}")
@@ -129,11 +113,7 @@ def cache_pims_video(dataset_path):
             chunk_size = (16, 240, 320, 3)
 
             # Store wrist and side video frames in separate datasets with chunking
-            grp.create_dataset(
-                "wrist", data=wrist_frames, compression="gzip", chunks=chunk_size
-            )
-            grp.create_dataset(
-                "side", data=side_frames, compression="gzip", chunks=chunk_size
-            )
+            grp.create_dataset("wrist", data=wrist_frames, compression="gzip", chunks=chunk_size)
+            grp.create_dataset("side", data=side_frames, compression="gzip", chunks=chunk_size)
 
     print("Video data saved to video_data.h5")
