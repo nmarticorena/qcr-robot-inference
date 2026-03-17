@@ -528,9 +528,10 @@
       </geometry>
       <material name="white"/>
     </visual>
-    <collision name="left_shoulder_pitch_link">
+    <collision>
+      <origin xyz="0 0.04 -0.01" rpy="0 1.5707963267948966 0"/>
       <geometry>
-        <mesh filename="g1/assets/collisions/left_shoulder_pitch_link_collision.STL"/>
+        <cylinder radius="0.03" length="0.05"/>
       </geometry>
     </collision>
     <collision_checking>
@@ -556,9 +557,10 @@
       </geometry>
       <material name="white"/>
     </visual>
-    <collision name="left_shoulder_roll_link">
+    <collision>
+      <origin xyz="-0.004 0.006 -0.053" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="g1/assets/collisions/left_shoulder_roll_link_collision.STL"/>
+        <cylinder radius="0.03" length="0.03"/>
       </geometry>
     </collision>
     <collision_checking>
@@ -742,9 +744,10 @@
       </geometry>
       <material name="white"/>
     </visual>
-    <collision name="right_shoulder_pitch_link">
+    <collision>
+      <origin xyz="0 -0.04 -0.01" rpy="0 1.5707963267948966 0"/>
       <geometry>
-        <mesh filename="g1/assets/collisions/right_shoulder_pitch_link_collision.STL"/>
+        <cylinder radius="0.03" length="0.05"/>
       </geometry>
     </collision>
     <collision_checking>
@@ -770,9 +773,10 @@
       </geometry>
       <material name="white"/>
     </visual>
-    <collision name="right_shoulder_roll_link">
+    <collision>
+      <origin xyz="-0.004 -0.006 -0.053" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="g1/assets/collisions/right_shoulder_roll_link_collision.STL"/>
+        <cylinder radius="0.03" length="0.03"/>
       </geometry>
     </collision>
     <collision_checking>
