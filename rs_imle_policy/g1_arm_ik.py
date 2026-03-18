@@ -77,7 +77,7 @@ class G1ReducedPinkIK:
             None,  # Not to use a freeflyer base
         )
         self.robot.collision_model.addAllCollisionPairs()
-        converted = force_convex_collision_geometry(self.robot)
+        converted = force_convex_collision_geometry(self.robot, inflation=self.config.inflation)
         print(f"Converted {converted} collision geometries to convex hulls")
         self._remove_collision_geometry(LEG_LINKS)
         self.robot.collision_model.addAllCollisionPairs()  # rebuild pairs without legs
@@ -162,9 +162,9 @@ class G1ReducedPinkIK:
             self.barriers.append(
                 SelfCollisionBarrier(
                     n_collision_pairs=len(self.robot.collision_model.collisionPairs),
-                    gain=5.0,
-                    safe_displacement_gain=1.0,
-                    d_min=0.01,
+                    gain=self.config.collision_gain,
+                    safe_displacement_gain=self.config.safe_displacement_gain,
+                    d_min=self.config.d_min,
                 )
             )
 
