@@ -22,6 +22,7 @@ class PositionBarrierBounds:
 
 @dataclass
 class G1IKConfig:
+    # urdf_path: str = "assets/g1_29dof_rev_1_0_with_inspire_hand_DFQ.urdf"
     urdf_path: str = "assets/g1.urdf"
     # Path for urdf
     srdf_path: str = "assets/g1_arms.srdf"
@@ -43,7 +44,7 @@ class G1IKConfig:
     # Barriers
     self_collision_avoidance: bool = True
     # Whether to add self-collision avoidance task
-    inflation: float = 0.005
+    inflation: float = 0.001
     # Inflation for convex meshes in meters, be mindful that this value is applied twice d - r1 - r2, so 5mm inflation means 10mm minimum distance between links
     d_min: float = 0.001
     # Minimum distance for self-collision
