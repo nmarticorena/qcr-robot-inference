@@ -20,7 +20,12 @@ from pink.visualization import start_viser_visualizer
 from scipy.spatial.transform import Rotation
 
 from rs_imle_policy.utils.collision_utils import force_convex_collision_geometry
-from rs_imle_policy.utils.urdf_utils import DEFAULT_LOCKED_JOINTS, LEG_LINKS, INSPIRE_FTP_HAND_LINKS
+from rs_imle_policy.utils.urdf_utils import (
+    DEFAULT_LOCKED_JOINTS,
+    INSPIRE_DFQ_HAND_LINKS,
+    LEG_LINKS,
+    INSPIRE_FTP_HAND_LINKS,
+)
 from rs_imle_policy.configs.g1_configs import G1IKConfig, PositionBarrierBounds
 
 
@@ -81,6 +86,7 @@ class G1ReducedPinkIK:
         print(f"Converted {converted} collision geometries to convex hulls")
         self._remove_collision_geometry(LEG_LINKS)
         self._remove_collision_geometry(INSPIRE_FTP_HAND_LINKS)
+        self._remove_collision_geometry(INSPIRE_DFQ_HAND_LINKS)
         self.robot.collision_model.addAllCollisionPairs()  # rebuild pairs without legs
 
         if srdf_path and os.path.exists(srdf_path):
@@ -187,6 +193,9 @@ class G1ReducedPinkIK:
                     ),
                 ]
             )
+
+    def remove_position_barrier(self):
+        self.barriers = [b for b in self.barriers if not isinstance(b, PositionBarrier)]
 
     def _setup_limits(self):
         self.limits = [self.configuration.model.configuration_limit, self.configuration.model.velocity_limit]

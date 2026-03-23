@@ -193,6 +193,36 @@ INSPIRE_DFQ_HAND_JOINTS = [
     "R_pinky_intermediate_joint",
 ]
 
+
+INSPIRE_DFQ_HAND_LINKS = [
+    "L_hand_base_link",
+    "L_thumb_proximal_base",
+    "L_thumb_proximal",
+    "L_thumb_intermediate",
+    "L_thumb_distal",
+    "L_index_proximal",
+    "L_index_intermediate",
+    "L_middle_proximal",
+    "L_middle_intermediate",
+    "L_ring_proximal",
+    "L_ring_intermediate",
+    "L_pinky_proximal",
+    "L_pinky_intermediate",
+    "R_hand_base_link",
+    "R_thumb_proximal_base",
+    "R_thumb_proximal",
+    "R_thumb_intermediate",
+    "R_thumb_distal",
+    "R_index_proximal",
+    "R_index_intermediate",
+    "R_middle_proximal",
+    "R_middle_intermediate",
+    "R_ring_proximal",
+    "R_ring_intermediate",
+    "R_pinky_proximal",
+    "R_pinky_intermediate",
+]
+
 LEG_LINKS = [
     "left_hip_pitch_link",
     "left_hip_roll_link",
