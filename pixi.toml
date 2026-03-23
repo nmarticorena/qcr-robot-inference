@@ -111,6 +111,7 @@ pink = ">=4.1.0"
 viser = ">=1.0.24,<2"
 nanobind = ">=2.12.0,<3"
 unitree_sdk2py = { version = ">=1.0.1,<2", channel = "nmarticorena" }
+rich = ">=14.3.3,<15"
 
 [pypi-options]
 no-build-isolation = true
@@ -133,6 +134,7 @@ ruckig = {version = "==0.15.3"}
 
 atomics = ">=1.0.3, <2"
 panda-python = ">=0.8.1, <0.9"
+rich-click = ">=1.9.7, <2"
 
 [activation.env]
 PANDA_IP = "172.16.0.2"

@@ -776,6 +776,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/5d/19/fd3ef348460c80af7bb4669ea7926651d1f95c23ff2df18b9d24bab4f3fa/pre_commit-4.5.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/42/59/123aee44a039b212cfb8d90be1adf06496a99b313ee1683aadf90b3d9799/progress-1.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c2/3c/2005227cb951df502412de2fa781f800663cccbef8d90ec6f1b371ac2c0d/python_discovery-1.2.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ca/e5/d708d262b600a352abe01c2ae360d8ff75b0af819b78e9af293191d928e6/rich_click-1.9.7-py3-none-any.whl
       - pypi: git+https://github.com/nmarticorena/robotics-toolbox-python.git#d0716acd762725baf47dadb1709b3781f7db05f3
       - pypi: https://files.pythonhosted.org/packages/9e/da/3c7eae56fc32512e89eb239f7f7bb180764a4ca796c2e077166ed439fea9/rtb-data-1.0.1.tar.gz
       - pypi: https://files.pythonhosted.org/packages/bc/b7/d3d7c7f507ce8b6a7558418468e796d462dd2053ff3c555727c3f384941e/ruckig-0.15.3.tar.gz
@@ -7424,7 +7425,7 @@ packages:
   timestamp: 1767634121080
 - pypi: ../motion_tools
   name: motion-tools
-  version: 0.1.21.dev1+g3783749db.d20260323
+  version: 0.1.21.dev1+g3783749db
   sha256: 7bb976a3c37d9595232445c51910338e374b942292799be75bcd4e7cab5791d4
   requires_dist:
   - hatchling>=1.28.0,<2
@@ -9854,6 +9855,41 @@ packages:
   - pkg:pypi/rich?source=compressed-mapping
   size: 208472
   timestamp: 1771572730357
+- pypi: https://files.pythonhosted.org/packages/ca/e5/d708d262b600a352abe01c2ae360d8ff75b0af819b78e9af293191d928e6/rich_click-1.9.7-py3-none-any.whl
+  name: rich-click
+  version: 1.9.7
+  sha256: 2f99120fca78f536e07b114d3b60333bc4bb2a0969053b1250869bcdc1b5351b
+  requires_dist:
+  - click>=8
+  - colorama ; sys_platform == 'win32'
+  - rich>=12
+  - typing-extensions>=4 ; python_full_version < '3.11'
+  - inline-snapshot>=0.24 ; extra == 'dev'
+  - jsonschema>=4 ; extra == 'dev'
+  - mypy>=1.14.1 ; extra == 'dev'
+  - nodeenv>=1.9.1 ; extra == 'dev'
+  - packaging>=25 ; extra == 'dev'
+  - pre-commit>=3.5 ; extra == 'dev'
+  - pytest>=8.3.5 ; extra == 'dev'
+  - pytest-cov>=5 ; extra == 'dev'
+  - rich-codex>=1.2.11 ; extra == 'dev'
+  - ruff>=0.12.4 ; extra == 'dev'
+  - typer>=0.15 ; extra == 'dev'
+  - types-setuptools>=75.8.0.20250110 ; extra == 'dev'
+  - markdown-include>=0.8.1 ; extra == 'docs'
+  - mike>=2.1.3 ; extra == 'docs'
+  - mkdocs[docs]>=1.6.1 ; extra == 'docs'
+  - mkdocs-github-admonitions-plugin>=0.1.1 ; extra == 'docs'
+  - mkdocs-glightbox>=0.4 ; extra == 'docs'
+  - mkdocs-include-markdown-plugin>=7.1.7 ; python_full_version >= '3.9' and extra == 'docs'
+  - mkdocs-material[imaging]~=9.5.18 ; extra == 'docs'
+  - mkdocs-material-extensions>=1.3.1 ; extra == 'docs'
+  - mkdocs-redirects>=1.2.2 ; extra == 'docs'
+  - mkdocs-rss-plugin>=1.15 ; extra == 'docs'
+  - mkdocstrings[python]>=0.26.1 ; extra == 'docs'
+  - rich-codex>=1.2.11 ; extra == 'docs'
+  - typer>=0.15 ; extra == 'docs'
+  requires_python: '>=3.8'
 - conda: https://conda.anaconda.org/conda-forge/noarch/robot_descriptions-1.23.0-pyhd8ed1ab_0.conda
   sha256: 36fb071224de0a9f928239f63f17d35dcf3a89d6e67d5635e8f8a7cf3062596a
   md5: 2afc887825ac537ec9ac6044de5b0a5d
