@@ -1,5 +1,6 @@
 import numpy as np
 import json
+import os
 from dataclasses import dataclass
 import spatialmath as sm
 from typing import Optional
@@ -50,10 +51,15 @@ class G1RobotInterface(BaseRobot):
         visualizer: Optional[ReRunRobot] = None,
         ik_visualizer: Optional[ReRunRobot] = None,
     ):
+        self.simulation = simulation
         dds_domain_id = 1 if simulation else 0
+        if simulation:
+            ChannelFactoryInitialize(id=dds_domain_id)  # dds domain id
+        else:
+            ChannelFactoryInitialize(id=dds_domain_id,networkInterface=os.environ["G1_NETWORK_INTERFACE"] )  # dds domain id
+        print(dds_domain_id)
         ik_config = G1IKConfigSim() if simulation else G1IKConfigReal()
-        ChannelFactoryInitialize(id=dds_domain_id)  # dds domain id
-        self.controller = G1_29_ArmController(motion_mode=False, simulation_mode=simulation)
+        self.controller = G1_29_ArmController(motion_mode=False, simulation_mode=simulation, sub_mode = False)
         self.visualizer = visualizer
         self.ik_visualizer = ik_visualizer
         self.q0 = self.controller.get_current_dual_arm_q()
@@ -78,8 +84,10 @@ class G1RobotInterface(BaseRobot):
 
     def reset_sim(self):
         print("Resetting simulation to initial pose")
-        self.move_to_start()
-        publish_reset_category(1, self.reset_pose_publisher)
+        if self.simulation:
+            self.move_to_start()
+            publish_reset_category(1, self.reset_pose_publisher)
+        print("Real robot does not have reser sim method")
 
     def init_arms(self):
         self.ik_solver.remove_position_barrier()
@@ -89,12 +97,13 @@ class G1RobotInterface(BaseRobot):
             startup_config = json.load(f)
         waypoints = startup_config["waypoints"]
 
+        l_poses = [pin.SE3(np.array(waypoint["left"]["matrix"]).reshape(4,4)) for waypoint in waypoints]
+        r_poses = [pin.SE3(np.array(waypoint["right"]["matrix"]).reshape(4,4)) for waypoint in waypoints]
+
         # Check which waypoint is closest to the current configuration and start from there
         distances = []
         current_poses = self.ik_solver.get_ee_poses(self.controller.get_current_dual_arm_q())
-        for waypoint in waypoints:
-            l_waypoint = pin.SE3(np.array(waypoint["left"]["matrix"]).reshape(4, 4))
-            r_waypoint = pin.SE3(np.array(waypoint["right"]["matrix"]).reshape(4, 4))
+        for l_waypoint, r_waypoint in zip(l_poses, r_poses):
             dist_l = current_poses.left.translation - l_waypoint.translation
             dist_r = current_poses.right.translation - r_waypoint.translation
             dist = np.linalg.norm(dist_l) + np.linalg.norm(dist_r)
@@ -102,23 +111,26 @@ class G1RobotInterface(BaseRobot):
 
         start_index = np.argmin(distances)
 
-        for i in range(start_index, len(waypoints) - 1):
-            start = waypoints[i]
-            end = waypoints[i + 1]
+        l_poses.insert(start_index, current_poses.left)
+        r_poses.insert(start_index, current_poses.right)
 
-            l_start = pin.SE3(np.array(start["left"]["matrix"]).reshape(4, 4))
-            l_end = pin.SE3(np.array(end["left"]["matrix"]).reshape(4, 4))
+        for i in range(start_index, len(l_poses) - 1):
+            l_start = l_poses[i]
+            l_end = l_poses[i + 1]
 
-            r_start = pin.SE3(np.array(start["right"]["matrix"]).reshape(4, 4))
-            r_end = pin.SE3(np.array(end["right"]["matrix"]).reshape(4, 4))
+            r_start = r_poses[i]
+            r_end = r_poses[i + 1]
 
-            for t in range(1000):
-                alpha = t / 1000
+            for t in range(100):
+                alpha = t / (100 - 1)
+
                 l_interp = pin.SE3.Interpolate(l_start, l_end, alpha)
                 r_interp = pin.SE3.Interpolate(r_start, r_end, alpha)
+
                 self.ik_solver.set_targets(l_interp, r_interp)
                 self.step_servo()
-                time.sleep(0.001)
+                time.sleep(0.01)
+
 
         self.ik_solver._setup_barriers()
         self.q0 = self.controller.get_current_dual_arm_q()
@@ -218,5 +230,4 @@ if __name__ == "__main__":
     robot_visualizer = ReRunRobot.g1(rec, "g1_robot", "pelvis")
     ik_visualizer = ReRunRobot.g1_debug(rec, "g1_ik_debug", "pelvis")
 
-    robot_interface = G1RobotInterface(simulation=True, visualizer=robot_visualizer, ik_visualizer=ik_visualizer)
-    robot_interface.reset_sim()
+    robot_interface = G1RobotInterface(simulation=False, visualizer=robot_visualizer, ik_visualizer=ik_visualizer)

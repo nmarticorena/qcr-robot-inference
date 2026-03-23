@@ -175,6 +175,7 @@ class G1ReducedPinkIK:
                 )
             )
         if self.config.box_barrier_gain > 0:
+            print("Include Positions barriers")
             self.barriers.extend(
                 [
                     PositionBarrier(
