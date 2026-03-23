@@ -196,7 +196,7 @@ class G1RobotInterface(BaseRobot):
 
         q_sol = self.ik_solver.solve(dt=dt, n_steps=20)
         if self.ik_visualizer is not None:
-            q_sol_full = np.zeros(29)
+            q_sol_full = q.copy()
             q_sol_full[15:29] = q_sol
             self.ik_visualizer.log(q_sol_full)
 
