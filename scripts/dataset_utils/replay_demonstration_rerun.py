@@ -36,43 +36,29 @@ for episode in rlds:
         gello_q = unnormalize_data(ep_data["gello_q"][idx], dataset.stats["gello_q"])
         robot_q = unnormalize_data(ep_data["robot_q"][idx], dataset.stats["robot_q"])
 
-        current_pos = unnormalize_data(
-            ep_data["robot_pos"][idx], dataset.stats["robot_pos"]
-        )
+        current_pos = unnormalize_data(ep_data["robot_pos"][idx], dataset.stats["robot_pos"])
         current_orien = unnormalize_data(
             ep_data["robot_orien"][idx], dataset.stats["robot_orien"]
         )  # 6-D representation
         current_orien = transform_utils.rotation_6d_to_quat(current_orien).numpy()
         gui.log_pose(current_pos, current_orien, name="debug/robot_current_pose")
 
-        action_pos = unnormalize_data(
-            ep_data["action_pos"][idx], dataset.stats["action_pos"]
-        )
-        action_orien = unnormalize_data(
-            ep_data["action_orien"][idx], dataset.stats["action_orien"]
-        )
+        action_pos = unnormalize_data(ep_data["action_pos"][idx], dataset.stats["action_pos"])
+        action_orien = unnormalize_data(ep_data["action_orien"][idx], dataset.stats["action_orien"])
         action_orien = transform_utils.rotation_6d_to_quat(action_orien).numpy()
         gui.log_pose(action_pos, action_orien, name="debug/action_pose")
 
-        relative_pos = unnormalize_data(
-            ep_data["relative_pos"][idx], dataset.stats["relative_pos"]
-        )
-        relative_orien = unnormalize_data(
-            ep_data["relative_orien"][idx], dataset.stats["relative_orien"]
-        )
+        relative_pos = unnormalize_data(ep_data["relative_pos"][idx], dataset.stats["relative_pos"])
+        relative_orien = unnormalize_data(ep_data["relative_orien"][idx], dataset.stats["relative_orien"])
         relative_orien = transform_utils.rotation_6d_to_quat(relative_orien).numpy()
-        gui.log_pose(
-            relative_pos, relative_orien, name="debug/robot_current_pose/relative_pose"
-        )
+        gui.log_pose(relative_pos, relative_orien, name="debug/robot_current_pose/relative_pose")
 
         progress = unnormalize_data(ep_data["progress"][idx], dataset.stats["progress"])
 
         gui.log_robot_state(gello_q)
         gui_follower.log_robot_state(robot_q)
         for camera in vision_config.cameras:
-            rr.log(
-                camera, rr.Image(ep_data_video[camera][idx]).compress(jpeg_quality=80)
-            )
+            rr.log(camera, rr.Image(ep_data_video[camera][idx]).compress(jpeg_quality=80))
 
         rr.log("action/progress", rr.Scalars(progress))
 

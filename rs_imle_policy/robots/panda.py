@@ -1,22 +1,16 @@
-"""Robot control module for Franka Panda robot.
-
-This module provides a high-level interface for controlling the Franka Panda
-robot using the frankx library. It handles motion control, gripper operations,
-and state monitoring.
-"""
-
 from enum import Enum
-from typing import Optional
-
 import numpy as np
 from numpy.typing import NDArray
+from typing import Optional
 
-from frankx import Affine, JointMotion, Waypoint, WaypointMotion
+from frankx import Gripper, Robot, JointMotion, Waypoint, WaypointMotion, Affine
 from panda_py import Panda, libfranka
 
 from rs_imle_policy.utils import transforms
+from rs_imle_policy.robots.base import BaseRobot
 
-# Constants
+
+# Constants TODO: Decide where is better to have these
 DEFAULT_ROBOT_IP = "172.16.0.2"
 DEFAULT_GRIPPER_SPEED = 0.1
 DEFAULT_GRIPPER_FORCE = 40
@@ -34,7 +28,7 @@ class GripperState(Enum):
     CLOSED = 1
 
 
-class FrankxRobot:
+class FrankxRobot(BaseRobot):
     """High-level interface for Franka Panda robot control.
 
     This class provides methods for robot motion control, gripper operations,
@@ -63,8 +57,6 @@ class FrankxRobot:
             ip: Robot IP address
             dynamic_rel: Dynamic scaling factor for robot motion
         """
-
-        from frankx import Gripper, Robot
 
         self.robot = Robot(ip, dynamic_rel=dynamic_rel, repeat_on_error=True)
 
@@ -318,6 +310,12 @@ class PandaPyRobot:
             orientations: Array of shape (N, 4) in quaternion format [w, x, y, z]
             relative: If True, waypoints are relative to current pose (not yet implemented)
         """
+        print(
+            "Waypoints not implemented for pandapy controller yet, this interface is mainly for",
+            "using the teaching mode controller (gravity compensation) for inference using ",
+            "the dry run option. If you want to use the waypoint interface, please use the ",
+            "FrankxRobot controller instead.",
+        )
         return
 
     def init_waypoint_motion(self):

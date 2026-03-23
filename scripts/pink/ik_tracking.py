@@ -75,9 +75,7 @@ def add_handle(task: FrameTask, scale: float):
 
 
 def loadG1() -> pin.RobotWrapper:
-    robot = pin.RobotWrapper.BuildFromURDF(
-        "assets/g1.urdf", ["assets/"], pin.JointModelFreeFlyer()
-    )
+    robot = pin.RobotWrapper.BuildFromURDF("assets/g1.urdf", ["assets/"], pin.JointModelFreeFlyer())
 
     robot.collision_model.addAllCollisionPairs()
     print("Collision pairs:", len(robot.collision_model.collisionPairs))
@@ -91,12 +89,8 @@ def loadG1() -> pin.RobotWrapper:
     robot.collision_model.removeAllCollisionPairs()
     robot.collision_model.addAllCollisionPairs()
     pin.removeCollisionPairs(robot.model, robot.collision_model, srdf)
-    robot.collision_data = process_collision_pairs(
-        robot.model, robot.collision_model, srdf
-    )
-    print(
-        "Collision pairs after processing:", len(robot.collision_model.collisionPairs)
-    )
+    robot.collision_data = process_collision_pairs(robot.model, robot.collision_model, srdf)
+    print("Collision pairs after processing:", len(robot.collision_model.collisionPairs))
 
     def inspect_collision_types(robot):
         for go in robot.collision_model.geometryObjects:
@@ -135,9 +129,7 @@ def force_convex_collision_geometry(robot: pin.RobotWrapper) -> int:
 
 
 def print_closest_pairs(robot, q, top_k=20):
-    pin.computeDistances(
-        robot.model, robot.data, robot.collision_model, robot.collision_data, q
-    )
+    pin.computeDistances(robot.model, robot.data, robot.collision_model, robot.collision_data, q)
 
     rows = []
     for k, pair in enumerate(robot.collision_model.collisionPairs):
@@ -226,11 +218,7 @@ class CollisionDebugViewer:
         off = np.array([0.0, 0.0, -100.0])
 
         for i, h in enumerate(self.handles):
-            if (
-                i < len(rows)
-                and rows[i]["p1"] is not None
-                and rows[i]["p2"] is not None
-            ):
+            if i < len(rows) and rows[i]["p1"] is not None and rows[i]["p2"] is not None:
                 row = rows[i]
                 p1 = row["p1"]
                 p2 = row["p2"]
@@ -262,9 +250,7 @@ class CollisionDebugViewer:
                         h["label"].position = mid
                     if hasattr(h["label"], "text"):
                         h["label"].text = (
-                            f"[{row['pair_index']}] "
-                            f"{row['link1']} ↔ {row['link2']}  "
-                            f"d={row['distance']:.4f}"
+                            f"[{row['pair_index']}] {row['link1']} ↔ {row['link2']}  d={row['distance']:.4f}"
                         )
                     if hasattr(h["label"], "visible"):
                         h["label"].visible = True

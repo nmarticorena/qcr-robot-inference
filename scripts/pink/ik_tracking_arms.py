@@ -14,9 +14,9 @@ ik = G1ReducedPinkIK(
 targets = ik.get_targets_from_configuration()
 ik.set_targets(targets.left, targets.right)
 
-rate = RateLimiter(200, warn=True)
+rate = RateLimiter(int(1 / CONTROL_DT), warn=True)
 while True:
     rate.sleep()
-    q = ik.solve(dt=1 / 200)
+    q = ik.solve(dt=CONTROL_DT)
     ik.configuration.update(q.copy())
     ik.viz.display(q)

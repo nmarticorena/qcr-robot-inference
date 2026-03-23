@@ -20,9 +20,7 @@ def convert_to_h5(dataset_path: str, /, vision_config: G1VisionConfig):
             grp = h5f.create_group(f"{episode_id}")
             for ix, cam_name in enumerate(vision_config.cameras):
                 image_path = os.path.join(dataset_path, "episodes", episode, "colors")
-                image_files = sorted(
-                    os.listdir(image_path), key=lambda x: int(x.split("_")[0])
-                )
+                image_files = sorted(os.listdir(image_path), key=lambda x: int(x.split("_")[0]))
                 frames = []
                 for image_file in image_files:
                     image = cv2.imread(os.path.join(image_path, image_file))
@@ -33,9 +31,7 @@ def convert_to_h5(dataset_path: str, /, vision_config: G1VisionConfig):
                 chunk_size = (16, *vision_config.img_shape, 3)
 
                 # Store wrist and side video frames in separate datasets with chunking
-                grp.create_dataset(
-                    cam_name, data=frames, compression="gzip", chunks=chunk_size
-                )
+                grp.create_dataset(cam_name, data=frames, compression="gzip", chunks=chunk_size)
     print(f"Image data saved to {dataset_name}")
     with open(dataset_path + "/vision_config.yml", "w") as f:
         f.write(tyro.extras.to_yaml(vision_config))

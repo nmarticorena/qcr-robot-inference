@@ -58,9 +58,7 @@ def train(
 ):
     nets.train()
 
-    folder = os.path.join(
-        "saved_weights", args.task_name, args.model.name + "_" + args.exp_name
-    )
+    folder = os.path.join("saved_weights", args.task_name, args.model.name + "_" + args.exp_name)
     os.makedirs(folder, exist_ok=True)
 
     config = tyro.extras.to_yaml(args)
@@ -78,21 +76,15 @@ def train(
     for epoch in range(n_epochs):
         epoch_loss = []
         start_time = time.time()
-        with tqdm(
-            dataloader, desc=f"Epoch {epoch + 1}/{n_epochs}", leave=False
-        ) as tepoch:
+        with tqdm(dataloader, desc=f"Epoch {epoch + 1}/{n_epochs}", leave=False) as tepoch:
             for batch in tepoch:
                 nagent = batch["state"][:, :obs_horizon].to(device)
                 naction = batch["action"].to(device)
                 B = naction.shape[0]
 
-                images = [
-                    batch[f"frame_{cam}"][:, :obs_horizon].to(device)
-                    for cam in cams_names
-                ]
+                images = [batch[f"frame_{cam}"][:, :obs_horizon].to(device) for cam in cams_names]
                 image_features = [
-                    process_image(img, nets[f"vision_encoder_{cam}"], device)
-                    for img, cam in zip(images, cams_names)
+                    process_image(img, nets[f"vision_encoder_{cam}"], device) for img, cam in zip(images, cams_names)
                 ]
 
                 obs_features = torch.cat([*image_features, nagent], dim=-1)
@@ -108,9 +100,7 @@ def train(
                     ).long()
                     noisy_actions = noise_scheduler.add_noise(naction, noise, timesteps)
 
-                    noise_pred = nets["noise_pred_net"](
-                        noisy_actions, timesteps, global_cond=obs_cond
-                    )
+                    noise_pred = nets["noise_pred_net"](noisy_actions, timesteps, global_cond=obs_cond)
                     loss = nn.functional.mse_loss(noise_pred, noise)
                 elif isinstance(args.model, RSIMLE):
                     noise = torch.randn(
@@ -118,16 +108,10 @@ def train(
                         *naction.shape[1:],
                         device=device,
                     )
-                    repeated_obs_cond = obs_cond.repeat_interleave(
-                        args.model.n_samples_per_condition, dim=0
-                    )
+                    repeated_obs_cond = obs_cond.repeat_interleave(args.model.n_samples_per_condition, dim=0)
 
-                    fake_actions = nets["generator"](
-                        noise, global_cond=repeated_obs_cond
-                    )
-                    fake_actions = fake_actions.reshape(
-                        B, args.model.n_samples_per_condition, *naction.shape[1:]
-                    )
+                    fake_actions = nets["generator"](noise, global_cond=repeated_obs_cond)
+                    fake_actions = fake_actions.reshape(B, args.model.n_samples_per_condition, *naction.shape[1:])
 
                     loss = rs_imle_loss(naction, fake_actions, args.model.epsilon)
                 else:
@@ -156,9 +140,7 @@ def train(
         # save a checkpoint every 10 epochs
         if (epoch) % args.training_params.save_period == 0:
             torch.save(nets.state_dict(), f"{folder}/net_epoch_{epoch:04d}.pth")
-            shutil.copy(
-                f"{folder}/net_epoch_{epoch:04d}.pth", f"{folder}/net_epoch_last.pth"
-            )
+            shutil.copy(f"{folder}/net_epoch_{epoch:04d}.pth", f"{folder}/net_epoch_last.pth")
             torch.save(ema_nets.state_dict(), f"{folder}/ema_net_epoch_{epoch:04d}.pth")
             shutil.copy(
                 f"{folder}/ema_net_epoch_{epoch:04d}.pth",
@@ -167,9 +149,7 @@ def train(
 
         avg_loss = np.mean(epoch_loss)
         wandb.log({"avg_train_loss": avg_loss, "epoch": epoch})
-        print(
-            f"Epoch {epoch + 1}/{n_epochs} - Avg. Loss: {avg_loss:.4f} - Time: {time.time() - start_time:.2f}s"
-        )
+        print(f"Epoch {epoch + 1}/{n_epochs} - Avg. Loss: {avg_loss:.4f} - Time: {time.time() - start_time:.2f}s")
         # If the loss is 0 for a whole epoch, log flag in wandb
         if avg_loss == 0:
             wandb.log({"zero_loss_epoch": 1})

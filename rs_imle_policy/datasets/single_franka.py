@@ -59,9 +59,7 @@ class PandaPolicyDataset(BaseDataset):
         self.robot = rtb.models.Panda()
         super().__init__(*args, **kwargs)
 
-    def get_relative_transform(
-        self, current_pose: List[NDArray], next_pose: List[NDArray]
-    ) -> List[sm.SE3]:
+    def get_relative_transform(self, current_pose: List[NDArray], next_pose: List[NDArray]) -> List[sm.SE3]:
         """Compute relative transformation between consecutive poses.
 
         Args:
@@ -74,9 +72,7 @@ class PandaPolicyDataset(BaseDataset):
         current_pose_sm = [sm.SE3(pose) for pose in current_pose]
         next_pose_sm = [sm.SE3(pose) for pose in next_pose]
 
-        relative_transform = [
-            current.inv() * nxt for current, nxt in zip(current_pose_sm, next_pose_sm)
-        ]
+        relative_transform = [current.inv() * nxt for current, nxt in zip(current_pose_sm, next_pose_sm)]
         return relative_transform
 
     def create_rlds_dataset(self) -> dict:
@@ -92,9 +88,7 @@ class PandaPolicyDataset(BaseDataset):
         )
 
         for episode_index, episode in enumerate(episodes):
-            episode_path = os.path.join(
-                self.dataset_path, "episodes", episode, "state.json"
-            )
+            episode_path = os.path.join(self.dataset_path, "episodes", episode, "state.json")
 
             with open(episode_path, "r") as f:
                 data = json.load(f)
@@ -108,9 +102,7 @@ class PandaPolicyDataset(BaseDataset):
                 X_BE_next = X_BE_current[1:]
                 X_BE_next.append(X_BE_current[-1])
             else:
-                X_BE_next = [(self.robot.fkine(np.array(q))).A for q in df["gello_q"]][
-                    1:
-                ]
+                X_BE_next = [(self.robot.fkine(np.array(q))).A for q in df["gello_q"]][1:]
                 X_BE_next.append(X_BE_next[-1])
 
             relative_transform = self.get_relative_transform(X_BE_current, X_BE_next)
@@ -120,15 +112,9 @@ class PandaPolicyDataset(BaseDataset):
             gripper_action = df["gripper_action"].tolist()
             gripper_action = np.array(gripper_action).reshape(-1, 1)
 
-            X_BE_current_pos, X_BE_current_orien = (
-                transform_utils.extract_robot_pos_orien(np.array(X_BE_current))
-            )
-            X_BE_next_pos, X_BE_next_orien = transform_utils.extract_robot_pos_orien(
-                np.array(X_BE_next)
-            )
-            relative_pos, relative_orien = transform_utils.extract_robot_pos_orien(
-                np.array(relative_transform)
-            )
+            X_BE_current_pos, X_BE_current_orien = transform_utils.extract_robot_pos_orien(np.array(X_BE_current))
+            X_BE_next_pos, X_BE_next_orien = transform_utils.extract_robot_pos_orien(np.array(X_BE_next))
+            relative_pos, relative_orien = transform_utils.extract_robot_pos_orien(np.array(relative_transform))
 
             progress = self.linear_progress(len(df)).reshape(-1, 1)
 
@@ -148,12 +134,8 @@ class PandaPolicyDataset(BaseDataset):
             }
 
             if len(self.low_dim_obs_keys) != 0:
-                state = np.concatenate(
-                    [rlds[episode_index][key] for key in self.low_dim_obs_keys], axis=-1
-                )
-                action = np.concatenate(
-                    [rlds[episode_index][key] for key in self.action_keys], axis=-1
-                )
+                state = np.concatenate([rlds[episode_index][key] for key in self.low_dim_obs_keys], axis=-1)
+                action = np.concatenate([rlds[episode_index][key] for key in self.action_keys], axis=-1)
 
                 rlds[episode_index]["state"] = state
                 rlds[episode_index]["action"] = action
@@ -163,9 +145,7 @@ class PandaPolicyDataset(BaseDataset):
 if __name__ == "__main__":
     import time
 
-    dataset = PandaPolicyDataset(
-        "data/t_block_1", pred_horizon=16, obs_horizon=2, action_horizon=8
-    )
+    dataset = PandaPolicyDataset("data/t_block_1", pred_horizon=16, obs_horizon=2, action_horizon=8)
 
     idx = 0
     while True:

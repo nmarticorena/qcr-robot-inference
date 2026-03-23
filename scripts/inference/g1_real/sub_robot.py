@@ -1,5 +1,5 @@
-import numpy as np
 import rerun as rr
+import os
 from motion_tools.robot_gui import ReRunRobot
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize
 
