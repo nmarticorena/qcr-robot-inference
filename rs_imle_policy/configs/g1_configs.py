@@ -22,10 +22,10 @@ class PositionBarrierBounds:
 
 @dataclass
 class G1IKConfig:
-    # urdf_path: str = "assets/g1_29dof_rev_1_0_with_inspire_hand_DFQ.urdf"
-    urdf_path: str = "assets/g1.urdf"
+    urdf_path: str = "assets/g1_29dof_rev_1_0_with_inspire_hand_DFQ.urdf"
+    # urdf_path: str = "assets/g1.urdf"
     # Path for urdf
-    srdf_path: str = "assets/g1_arms.srdf"
+    srdf_path: str = "assets/g1_29dof_rev_1_0_with_inspire_hand_FTP.srdf"
     # Path for srdf
 
     ee_offset: float = 0.05
@@ -48,7 +48,7 @@ class G1IKConfig:
     # Inflation for convex meshes in meters, be mindful that this value is applied twice d - r1 - r2, so 5mm inflation means 10mm minimum distance between links
     d_min: float = 0.001
     # Minimum distance for self-collision
-    collision_gain: float = 100.0
+    collision_gain: float = 10.0
     # Gain for self-collision avoidance task
     safe_displacement_gain: float = 1.0
     # Gain for safe displacement task, to keep robot away of the barrier
@@ -59,8 +59,20 @@ class G1IKConfig:
     # Gain for box displacement task
 
     # Limits
-    acceleration_limit: Optional[float] = 10.0
+    acceleration_limit: Optional[float] = 100.0
     # Maximum acceleration for the joints as a multipler of the max velocity
 
     # QP configs
     solver: str = "daqp"
+
+
+@dataclass
+class G1IKConfigSim(G1IKConfig):
+    urdf_path: str = "assets/g1_29dof_rev_1_0_with_inspire_hand_DFQ.urdf"
+    srdf_path: str = "assets/g1_29dof_rev_1_0_with_inspire_hand_FTP.srdf"
+
+
+@dataclass
+class G1IKConfigReal(G1IKConfig):
+    urdf_path: str = "assets/g1_29dof_rev_1_0_with_inspire_hand_FTP.urdf"
+    srdf_path: str = "assets/g1_29dof_rev_1_0_with_inspire_hand_FTP.srdf"

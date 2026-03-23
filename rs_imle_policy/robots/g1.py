@@ -14,6 +14,7 @@ import rs_imle_policy.utils.transforms as transforms_utils
 from rs_imle_policy.robots.base import BaseRobot
 from rs_imle_policy.g1_arm_ik import G1ReducedPinkIK
 from rs_imle_policy.unitree import G1_29_ArmController
+from rs_imle_policy.configs.g1_configs import G1IKConfigSim, G1IKConfigReal
 import time
 
 
@@ -50,6 +51,7 @@ class G1RobotInterface(BaseRobot):
         ik_visualizer: Optional[ReRunRobot] = None,
     ):
         dds_domain_id = 1 if simulation else 0
+        ik_config = G1IKConfigSim() if simulation else G1IKConfigReal()
         ChannelFactoryInitialize(id=dds_domain_id)  # dds domain id
         self.controller = G1_29_ArmController(motion_mode=False, simulation_mode=simulation)
         self.visualizer = visualizer
@@ -59,6 +61,7 @@ class G1RobotInterface(BaseRobot):
             q0 = self.controller.get_current_motor_q()
             self.visualizer.log(q0)
         self.ik_solver = G1ReducedPinkIK(
+            config=ik_config,
             visualize=False,
             spawn_visualizer=False,
             q0=self.q0.copy(),
