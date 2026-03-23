@@ -16,6 +16,4 @@ controller = G1_29_ArmController(motion_mode=False, simulation_mode=True)
 while True:
     q = controller.get_current_motor_q()
     robot_gui.log(q)
-    controller.ctrl_dual_arm(
-        np.random.rand(14), np.zeros(14)
-    )  # Todo the tauff is the feedforward torque
+    controller.ctrl_dual_arm(np.random.rand(14), np.zeros(14))  # Todo the tauff is the feedforward torque

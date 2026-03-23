@@ -13,8 +13,6 @@ rr.spawn()
 while True:
     rr.log(
         "head_frame",
-        rr.EncodedImage(
-            contents=img_client.get_head_frame().jpg, media_type="image/jpeg"
-        ),
+        rr.EncodedImage(contents=img_client.get_head_frame().jpg, media_type="image/jpeg"),
     )
     time.sleep(1 / 30)  # 30Hz
