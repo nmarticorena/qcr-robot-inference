@@ -27,14 +27,14 @@ class BaseRobot(ABC):
     def get_state(self) -> NDArray:
         raise NotImplementedError
 
-    @abstractmethod
-    def get_robot_state(self):
-        raise NotImplementedError
-
-    @abstractmethod
-    def set_next_waypoints(self, translations, orientations, relative: bool = False) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def init_waypoint_motion(self) -> None:
-        raise NotImplementedError
+    # @abstractmethod
+    # def get_robot_state(self):
+    #     raise NotImplementedError
+    #
+    # @abstractmethod
+    # def set_next_waypoints(self, translations, orientations, relative: bool = False) -> None:
+    #     raise NotImplementedError
+    #
+    # @abstractmethod
+    # def init_waypoint_motion(self) -> None:
+    #     raise NotImplementedError
