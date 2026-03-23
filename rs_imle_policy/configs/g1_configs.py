@@ -44,11 +44,11 @@ class G1IKConfig:
     # Barriers
     self_collision_avoidance: bool = True
     # Whether to add self-collision avoidance task
-    inflation: float = 0.001
+    inflation: float = 0.005
     # Inflation for convex meshes in meters, be mindful that this value is applied twice d - r1 - r2, so 5mm inflation means 10mm minimum distance between links
-    d_min: float = 0.001
+    d_min: float = 0.005
     # Minimum distance for self-collision
-    collision_gain: float = 10.0
+    collision_gain: float = 100.0
     # Gain for self-collision avoidance task
     safe_displacement_gain: float = 1.0
     # Gain for safe displacement task, to keep robot away of the barrier

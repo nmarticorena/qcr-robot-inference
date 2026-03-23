@@ -129,6 +129,8 @@ class G1_29_ArmController:
         logger_mp.info("Lock OK!")
 
         self.ctrl_lock = threading.Lock()
+        with self.ctrl_lock:
+            self.q_target = self.get_current_dual_arm_q()
 
         if self.sub_mode:
             logger_mp.info("Subscriber mode")

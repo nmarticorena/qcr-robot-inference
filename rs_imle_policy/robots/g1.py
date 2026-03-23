@@ -101,7 +101,6 @@ class G1RobotInterface(BaseRobot):
             distances.append(dist)
 
         start_index = np.argmin(distances)
-        start_index = 0
 
         for i in range(start_index, len(waypoints) - 1):
             start = waypoints[i]
@@ -171,6 +170,9 @@ class G1RobotInterface(BaseRobot):
         self.ik_solver.set_targets(left, right)
 
     def step_servo(self, dt: float = 1 / 200) -> np.ndarray:
+        pairs = self.ik_solver.get_closest_collision_pairs(n=1)
+        for dist, a, b in pairs:
+            print(f"{dist:.4f}m  {a}  <->  {b}")
         q_arm = self.controller.get_current_dual_arm_q()
         q = self.controller.get_current_motor_q()
         self.ik_solver.configuration.update(q_arm.copy())
