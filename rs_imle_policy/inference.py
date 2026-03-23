@@ -26,7 +26,7 @@ from rs_imle_policy.configs.train_config import (
 from rs_imle_policy.datasets.base_dataset import normalize_data, unnormalize_data
 from rs_imle_policy.policy import Policy
 from rs_imle_policy.realsense.multi_realsense import MultiRealsense
-from rs_imle_policy.robot import FrankxRobot, PandaPyRobot
+from rs_imle_policy.robots import FrankxRobot, PandaPyRobot
 from rs_imle_policy.visualizer.rerun_tools import ReRunRobot
 
 # Constants
