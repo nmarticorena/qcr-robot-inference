@@ -56,10 +56,12 @@ class G1RobotInterface(BaseRobot):
         if simulation:
             ChannelFactoryInitialize(id=dds_domain_id)  # dds domain id
         else:
-            ChannelFactoryInitialize(id=dds_domain_id,networkInterface=os.environ["G1_NETWORK_INTERFACE"] )  # dds domain id
+            ChannelFactoryInitialize(
+                id=dds_domain_id, networkInterface=os.environ["G1_NETWORK_INTERFACE"]
+            )  # dds domain id
         print(dds_domain_id)
         ik_config = G1IKConfigSim() if simulation else G1IKConfigReal()
-        self.controller = G1_29_ArmController(motion_mode=False, simulation_mode=simulation, sub_mode = False)
+        self.controller = G1_29_ArmController(motion_mode=False, simulation_mode=simulation, sub_mode=False)
         self.visualizer = visualizer
         self.ik_visualizer = ik_visualizer
         self.q0 = self.controller.get_current_dual_arm_q()
@@ -72,6 +74,7 @@ class G1RobotInterface(BaseRobot):
             spawn_visualizer=False,
             q0=self.q0.copy(),
         )
+        breakpoint()
         pairs = self.ik_solver.get_closest_collision_pairs(n=20)
         for dist, a, b in pairs:
             print(f"{dist:.4f}m  {a}  <->  {b}")
@@ -97,8 +100,8 @@ class G1RobotInterface(BaseRobot):
             startup_config = json.load(f)
         waypoints = startup_config["waypoints"]
 
-        l_poses = [pin.SE3(np.array(waypoint["left"]["matrix"]).reshape(4,4)) for waypoint in waypoints]
-        r_poses = [pin.SE3(np.array(waypoint["right"]["matrix"]).reshape(4,4)) for waypoint in waypoints]
+        l_poses = [pin.SE3(np.array(waypoint["left"]["matrix"]).reshape(4, 4)) for waypoint in waypoints]
+        r_poses = [pin.SE3(np.array(waypoint["right"]["matrix"]).reshape(4, 4)) for waypoint in waypoints]
 
         # Check which waypoint is closest to the current configuration and start from there
         distances = []
@@ -130,7 +133,6 @@ class G1RobotInterface(BaseRobot):
                 self.ik_solver.set_targets(l_interp, r_interp)
                 self.step_servo()
                 time.sleep(0.01)
-
 
         self.ik_solver._setup_barriers()
         self.q0 = self.controller.get_current_dual_arm_q()
@@ -191,8 +193,9 @@ class G1RobotInterface(BaseRobot):
 
         if self.visualizer is not None:
             self.visualizer.log(q)
-            self.visualizer.log_pin_transform("left_ee", self.ik_solver.get_targets().left)
-            self.visualizer.log_pin_transform("right_ee", self.ik_solver.get_targets().right)
+            self.visualizer.log_pin_transform("left_ee", self.ik_solver.get_targets().left, parent_frame="world")
+            self.visualizer.log_pin_transform("right_ee", self.ik_solver.get_targets().right, parent_frame="world")
+            self.visualizer.log_pin_transform("pelvis", self.ik_solver.robot.data.oMf[1], parent_frame="world")
 
         q_sol = self.ik_solver.solve(dt=dt, n_steps=20)
         if self.ik_visualizer is not None:
@@ -227,7 +230,8 @@ if __name__ == "__main__":
     rec = rr.RecordingStream("g1_robot_interface_test")
     rec.spawn()
 
-    robot_visualizer = ReRunRobot.g1(rec, "g1_robot", "pelvis")
-    ik_visualizer = ReRunRobot.g1_debug(rec, "g1_ik_debug", "pelvis")
+    robot_visualizer = ReRunRobot.g1(rec, "g1_robot", "world")
+    ik_visualizer = ReRunRobot.g1_debug(rec, "g1_ik_debug", "world")
+    ik_visualizer.apply_color([1.0, 0.0, 0.0, 0.5])
 
-    robot_interface = G1RobotInterface(simulation=False, visualizer=robot_visualizer, ik_visualizer=ik_visualizer)
+    robot_interface = G1RobotInterface(simulation=True, visualizer=robot_visualizer, ik_visualizer=ik_visualizer)
