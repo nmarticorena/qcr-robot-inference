@@ -66,7 +66,7 @@ class G1RobotInterface(BaseRobot):
             )  # dds domain id
         print(dds_domain_id)
         ik_config = G1IKConfigSim() if simulation else G1IKConfigReal()
-        self.controller = G1_29_ArmController(motion_mode=False, simulation_mode=simulation, sub_mode=False)
+        self.controller = G1_29_ArmController(motion_mode=True, simulation_mode=simulation, sub_mode=False)
         self.hand_controller = Inspire_Controller_FTP()
         self.visualizer = visualizer
         self.ik_visualizer = ik_visualizer
