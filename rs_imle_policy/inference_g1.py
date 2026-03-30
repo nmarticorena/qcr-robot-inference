@@ -66,7 +66,7 @@ class PerceptionSystem:
         bgr = self.cams.get_head_frame().bgr
         assert bgr is not None, "Failed to get head frame from camera"  # Type narrowing
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-        return [{"color": rgb, "depth": None}]
+        return [{"color": bgr, "depth": None, "rgb": rgb}]
 
 
 class G1ArmsInferenceController:
