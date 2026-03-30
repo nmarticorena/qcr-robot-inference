@@ -1,6 +1,6 @@
 import numpy as np
 import threading
-from multiprocessing import Process, Array
+from multiprocessing import Process, Array, Lock
 import time
 from enum import IntEnum
 
@@ -23,18 +23,26 @@ Inspire_Num_Motors = 6
 class Inspire_Controller_FTP:
     def __init__(
         self,
-        left_hand_array,
-        right_hand_array,
-        dual_hand_data_lock=None,
-        dual_hand_state_array=None,
-        dual_hand_action_array=None,
         fps=100.0,
         Unit_Test=False,
         simulation_mode=False,
     ):
+        self.control_mode = ControlMode.POLICY
         self.fps = fps
         self.Unit_Test = Unit_Test
         self.simulation_mode = simulation_mode
+
+        self.left_hand_array = Array("d", 12, lock=True)  # [input]
+        self.right_hand_array = Array("d", 12, lock=True)  # [input]
+        self.dual_hand_data_lock = Lock()
+        self.dual_hand_state_array = Array("d", 12, lock=False)  # [output] current left, right hand state(12) data.
+        self.dual_hand_action_array = Array("d", 12, lock=False)  # [output] current left, right hand action(12) data.
+
+        # Initialize desired command to fully open
+        with self.left_hand_array.get_lock():
+            self.left_hand_array[:] = [1.0] * Inspire_Num_Motors
+        with self.right_hand_array.get_lock():
+            self.right_hand_array[:] = [1.0] * Inspire_Num_Motors
 
         # Initialize hand command publishers
         self.LeftHandCmd_publisher = ChannelPublisher(kTopicInspireFTPLeftCommand, inspire_dds.inspire_hand_ctrl)
@@ -75,15 +83,6 @@ class Inspire_Controller_FTP:
 
         hand_control_process = Process(
             target=self.control_process,
-            args=(
-                left_hand_array,
-                right_hand_array,
-                self.left_hand_state_array,
-                self.right_hand_state_array,
-                dual_hand_data_lock,
-                dual_hand_state_array,
-                dual_hand_action_array,
-            ),
         )
         hand_control_process.daemon = True
         hand_control_process.start()
@@ -143,15 +142,36 @@ class Inspire_Controller_FTP:
             )
             self._debug_count += 1
 
+    @staticmethod
+    def _normalize_command(q):
+        q = np.asarray(q, dtype=np.float64).reshape(Inspire_Num_Motors)
+        return np.clip(q, 0.0, 1.0)
+
+    @staticmethod
+    def _scale_command(q):
+        q = Inspire_Controller_FTP._normalize_command(q)
+        return [int(np.clip(v * 1000.0, 0, 1000)) for v in q]
+
+    def set_command(self, left_command, right_command):
+        """
+        Set desired normalized hand commands externally.
+        left_command/right_command: array-like, shape (6,), values in [0, 1]
+        """
+        left_command = self._normalize_command(left_command)
+        right_command = self._normalize_command(right_command)
+
+        with self.left_hand_array.get_lock():
+            self.left_hand_array[:] = left_command.tolist()
+        with self.right_hand_array.get_lock():
+            self.right_hand_array[:] = right_command.tolist()
+
+        with self.dual_hand_data_lock:
+            self.dual_hand_action_array[:] = np.concatenate((left_command, right_command)).tolist()
+
     def dummy_hand(
         self,
         left_state: float,
         right_state: float,
-        left_hand_state_array,
-        right_hand_state_array,
-        dual_hand_data_lock=None,
-        dual_hand_state_array=None,
-        dual_hand_action_array=None,
     ):
         start_time = time.time()
 
@@ -165,43 +185,27 @@ class Inspire_Controller_FTP:
 
     def policy_to_hand_command(self, left_policy_output, right_policy_output):
         """
-        left/right_policy_output: np.array of shape (6,) in radians,
+        left/right_policy_output: np.array of shape (6,) normalized,
         same joint ordering as the collected data.
         """
+        self.set_command(left_policy_output, right_policy_output)
 
-        def normalize(val, min_val, max_val):
-            return np.clip((max_val - val) / (max_val - min_val), 0.0, 1.0)
-
-        angle_ranges = [
-            (0.0, 1.7),  # idx 0
-            (0.0, 1.7),  # idx 1
-            (0.0, 1.7),  # idx 2
-            (0.0, 1.7),  # idx 3
-            (0.0, 0.5),  # idx 4
-            (-0.1, 1.3),  # idx 5
-        ]
-
-        def process(q):
-            normalized = np.array([normalize(q[i], *angle_ranges[i]) for i in range(Inspire_Num_Motors)])
-            scaled = [int(np.clip(v * 1000, 0, 1000)) for v in normalized]
-            return scaled
-
-        scaled_left = process(left_policy_output)
-        scaled_right = process(right_policy_output)
-        self._send_hand_command(scaled_left, scaled_right)
+    def get_state(self):
+        """
+        Returns the latest normalized state as a 12-dim numpy array:
+        [left(6), right(6)]
+        """
+        with self.left_hand_state_array.get_lock():
+            left = np.array(self.left_hand_state_array[:], dtype=np.float64).copy()
+        with self.right_hand_state_array.get_lock():
+            right = np.array(self.right_hand_state_array[:], dtype=np.float64).copy()
+        return left, right
 
     def control_process(
         self,
-        left_hand_array,
-        right_hand_array,
-        left_hand_state_array,
-        right_hand_state_array,
-        dual_hand_data_lock=None,
-        dual_hand_state_array=None,
-        dual_hand_action_array=None,
     ):
-        logger_mp.info("[Inspire_Controller_FTP] Control process started.")
         self.running = True
+        logger_mp.info("[Inspire_Controller_FTP] Control process started.")
 
         left_q_target = np.full(Inspire_Num_Motors, 1.0)
         right_q_target = np.full(Inspire_Num_Motors, 1.0)
@@ -209,65 +213,74 @@ class Inspire_Controller_FTP:
         try:
             while self.running:
                 start_time = time.time()
-                # get dual hand state
-                with left_hand_array.get_lock():
-                    left_hand_data = np.array(left_hand_array[:]).reshape(25, 3).copy()
-                with right_hand_array.get_lock():
-                    right_hand_data = np.array(right_hand_array[:]).reshape(25, 3).copy()
 
-                # Read left and right q_state from shared arrays
-                state_data = np.concatenate((np.array(left_hand_state_array[:]), np.array(right_hand_state_array[:])))
-
-                if not np.all(right_hand_data == 0.0) and not np.all(
-                    left_hand_data[4] == np.array([-1.13, 0.3, 0.15])
-                ):  # if hand data has been initialized.
-                    ref_left_value = (
-                        left_hand_data[self.hand_retargeting.left_indices[1, :]]
-                        - left_hand_data[self.hand_retargeting.left_indices[0, :]]
-                    )
-                    ref_right_value = (
-                        right_hand_data[self.hand_retargeting.right_indices[1, :]]
-                        - right_hand_data[self.hand_retargeting.right_indices[0, :]]
-                    )
-
-                    left_q_target = self.hand_retargeting.left_retargeting.retarget(ref_left_value)[
-                        self.hand_retargeting.left_dex_retargeting_to_hardware
-                    ]
-                    right_q_target = self.hand_retargeting.right_retargeting.retarget(ref_right_value)[
-                        self.hand_retargeting.right_dex_retargeting_to_hardware
-                    ]
-
-                    def normalize(val, min_val, max_val):
-                        return np.clip((max_val - val) / (max_val - min_val), 0.0, 1.0)
-
-                    for idx in range(Inspire_Num_Motors):
-                        if idx <= 3:
-                            left_q_target[idx] = normalize(left_q_target[idx], 0.0, 1.7)
-                            right_q_target[idx] = normalize(right_q_target[idx], 0.0, 1.7)
-                        elif idx == 4:
-                            left_q_target[idx] = normalize(left_q_target[idx], 0.0, 0.5)
-                            right_q_target[idx] = normalize(right_q_target[idx], 0.0, 0.5)
-                        elif idx == 5:
-                            left_q_target[idx] = normalize(left_q_target[idx], -0.1, 1.3)
-                            right_q_target[idx] = normalize(right_q_target[idx], -0.1, 1.3)
-
-                scaled_left_cmd = [int(np.clip(val * 1000, 0, 1000)) for val in left_q_target]
-                scaled_right_cmd = [int(np.clip(val * 1000, 0, 1000)) for val in right_q_target]
+                with self.left_hand_array.get_lock():
+                    left_q_target = np.array(self.left_hand_array[:])
+                with self.right_hand_array.get_lock():
+                    right_q_target = np.array(self.right_hand_array[:])
 
                 # get dual hand action
-                action_data = np.concatenate((left_q_target, right_q_target))
-                if dual_hand_state_array and dual_hand_action_array:
-                    with dual_hand_data_lock:
-                        dual_hand_state_array[:] = state_data
-                        dual_hand_action_array[:] = action_data
+                scaled_left_cmd = [int(np.clip(val * 1000, 0, 1000)) for val in left_q_target]
+                scaled_right_cmd = [int(np.clip(val * 1000, 0, 1000)) for val in right_q_target]
+                # action_data = np.concatenate((left_q_target, right_q_target))
+                # Read left and right q_state from shared arrays
+                # state_data = np.concatenate((np.array(left_hand_state_array[:]), np.array(right_hand_state_array[:])))
+                # if dual_hand_state_array and dual_hand_action_array:
+                #     with dual_hand_data_lock:
+                #         dual_hand_state_array[:] = state_data
+                #         dual_hand_action_array[:] = action_data
 
                 self._send_hand_command(scaled_left_cmd, scaled_right_cmd)
-                current_time = time.time()
-                time_elapsed = current_time - start_time
-                sleep_time = max(0, (1 / self.fps) - time_elapsed)
-                time.sleep(sleep_time)
+
+                elapsed = time.time() - start_time
+                time.sleep(max(0.0, (1.0 / self.fps) - elapsed))
         finally:
-            logger_mp.info("Inspire_Controller_FTP has been closed.")
+            logger_mp.info("Inspire_Controller_DFX has been closed.")
+
+    def stop(self):
+        self.running = False
+        logger_mp.info("[Inspire_Controller_FTP] Stopped.")
+
+    # def retarget(self,left_hand_array, right_hand_array, left_hand_state_array, right_hand_state_array,
+    #                     dual_hand_data_lock = None, dual_hand_state_array = None, dual_hand_action_array = None):
+    #     # get dual hand state
+    #     left_q_target = np.full(Inspire_Num_Motors, 1.)
+    #     right_q_target = np.full(Inspire_Num_Motors, 1.)
+    #     with left_hand_array.get_lock():
+    #         left_hand_data  = np.array(left_hand_array[:]).reshape(25, 3).copy()
+    #     with right_hand_array.get_lock():
+    #         right_hand_data = np.array(right_hand_array[:]).reshape(25, 3).copy()
+    #
+    #     if not np.all(right_hand_data == 0.0) and not np.all(left_hand_data[4] == np.array([-1.13, 0.3, 0.15])): # if hand data has been initialized.
+    #         ref_left_value = left_hand_data[self.hand_retargeting.left_indices[1,:]] - left_hand_data[self.hand_retargeting.left_indices[0,:]]
+    #         ref_right_value = right_hand_data[self.hand_retargeting.right_indices[1,:]] - right_hand_data[self.hand_retargeting.right_indices[0,:]]
+    #
+    #         left_q_target  = self.hand_retargeting.left_retargeting.retarget(ref_left_value)[self.hand_retargeting.left_dex_retargeting_to_hardware]
+    #         right_q_target = self.hand_retargeting.right_retargeting.retarget(ref_right_value)[self.hand_retargeting.right_dex_retargeting_to_hardware]
+    #
+    #         # In website https://support.unitree.com/home/en/G1_developer/inspire_dfx_dexterous_hand, you can find
+    #         #     In the official document, the angles are in the range [0, 1] ==> 0.0: fully closed  1.0: fully open
+    #         # The q_target now is in radians, ranges:
+    #         #     - idx 0~3: 0~1.7 (1.7 = closed)
+    #         #     - idx 4:   0~0.5
+    #         #     - idx 5:  -0.1~1.3
+    #         # We normalize them using (max - value) / range
+    #         def normalize(val, min_val, max_val):
+    #             return np.clip((max_val - val) / (max_val - min_val), 0.0, 1.0)
+    #
+    #         for idx in range(Inspire_Num_Motors):
+    #             if idx <= 3:
+    #                 left_q_target[idx]  = normalize(left_q_target[idx], 0.0, 1.7)
+    #                 right_q_target[idx] = normalize(right_q_target[idx], 0.0, 1.7)
+    #             elif idx == 4:
+    #                 left_q_target[idx]  = normalize(left_q_target[idx], 0.0, 0.5)
+    #                 right_q_target[idx] = normalize(right_q_target[idx], 0.0, 0.5)
+    #             elif idx == 5:
+    #                 left_q_target[idx]  = normalize(left_q_target[idx], -0.1, 1.3)
+    #                 right_q_target[idx] = normalize(right_q_target[idx], -0.1, 1.3)
+    #
+    #
+    #     return left_q_target, right_q_target
 
 
 # Update hand state, according to the official documentation:
@@ -296,6 +309,12 @@ class Inspire_Left_Hand_JointIndex(IntEnum):
     kLeftHandIndex = 9
     kLeftHandThumbBend = 10
     kLeftHandThumbRotation = 11
+
+
+class ControlMode(IntEnum):
+    RETARGETING = 0
+    CONTROLLER = 1
+    POLICY = 2
 
 
 INSPIRE_FTP_JOINT_MAP: dict[int, str] = {
