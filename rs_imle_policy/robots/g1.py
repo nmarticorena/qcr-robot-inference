@@ -61,7 +61,7 @@ class G1RobotInterface(BaseRobot):
             )  # dds domain id
         print(dds_domain_id)
         ik_config = G1IKConfigSim() if simulation else G1IKConfigReal()
-        self.controller = G1_29_ArmController(motion_mode=False, simulation_mode=simulation, sub_mode=False)
+        self.controller = G1_29_ArmController(motion_mode=True, simulation_mode=simulation, sub_mode=False)
         self.visualizer = visualizer
         self.ik_visualizer = ik_visualizer
         self.q0 = self.controller.get_current_dual_arm_q()
@@ -234,4 +234,4 @@ if __name__ == "__main__":
     ik_visualizer = ReRunRobot.g1_debug(rec, "g1_ik_debug", "world")
     ik_visualizer.apply_color([1.0, 0.0, 0.0, 0.5])
 
-    robot_interface = G1RobotInterface(simulation=True, visualizer=robot_visualizer, ik_visualizer=ik_visualizer)
+    robot_interface = G1RobotInterface(simulation=False, visualizer=robot_visualizer, ik_visualizer=ik_visualizer)
