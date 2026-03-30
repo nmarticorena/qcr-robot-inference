@@ -176,6 +176,7 @@ class G1ArmsDataset(BaseDataset):
                 "right_hand_state": right_hand_state,
                 "right_hand_action": right_hand_action,
                 "progress": progress,
+                "robot_state": robot_state,
             }
 
             if len(self.low_dim_obs_keys) != 0:
