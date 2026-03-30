@@ -35,7 +35,9 @@ subprocess.Popen(
     stderr=subprocess.DEVNULL,
 )
 
-controller = G1ArmsInferenceController(config, eval_name=exp_name, timeout=args.timeout, dry_run=args.dry_run)
+controller = G1ArmsInferenceController(
+    config, eval_name=exp_name, timeout=args.timeout, dry_run=args.dry_run, simulation=False
+)
 
 controller.run_experiments(10)
 controller.perception_system.stop()
