@@ -96,7 +96,7 @@ class G1ArmsInferenceController:
         self.rerun_ik.apply_color([0, 1, 0, 0.5])
         self.all_frames = defaultdict(list)
 
-        self.perception_system = PerceptionSystem(os.environ["G1_IP"], 60001)  # TODO: Need to get this from config
+        self.perception_system = PerceptionSystem(os.environ["G1_IP"], 60000)  # TODO: Need to get this from config
         self.robot = G1RobotInterface(simulation)
         self.setup_diffusion_policy()
 
