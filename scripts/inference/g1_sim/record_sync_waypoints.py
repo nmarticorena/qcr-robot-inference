@@ -10,6 +10,7 @@ import rerun as rr
 from loop_rate_limiters import RateLimiter
 from motion_tools.robot_gui import ReRunRobot
 
+from rs_imle_policy.configs.g1_configs import G1IKConfig
 from rs_imle_policy.g1_arm_ik import G1ReducedPinkIK
 
 
@@ -99,6 +100,7 @@ def main() -> None:
     args = parse_args()
 
     ik = G1ReducedPinkIK(
+        config=G1IKConfig(box_barrier_gain=0),
         visualize=True,
         spawn_visualizer=True,
     )
