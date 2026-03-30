@@ -15,6 +15,7 @@ import rs_imle_policy.utils.transforms as transforms_utils
 from rs_imle_policy.robots.base import BaseRobot
 from rs_imle_policy.g1_arm_ik import G1ReducedPinkIK
 from rs_imle_policy.unitree import G1_29_ArmController
+from rs_imle_policy.inspire import Inspire_Controller_FTP
 from rs_imle_policy.configs.g1_configs import G1IKConfigSim, G1IKConfigReal
 import time
 
@@ -35,13 +36,17 @@ class RobotState:
     X_WR: sm.SE3
     "End-effector pose for the right arm in world frame"
     left_arm_state: np.ndarray
-    "Concatenated position and orientation (6D) for the left arm end-effector"
+    "Concatenated position and orientation (6D) for the left arm end-effector [x,y,z,6d rotation]"
     right_arm_state: np.ndarray
-    "Concatenated position and orientation (6D) for the right arm end-effector"
+    "Concatenated position and orientation (6D) for the right arm end-effector [x,y,z,6d rotation]"
+    left_hand_state: np.ndarray
+    "State of the left hand 6 dof"
+    right_hand_state: np.ndarray
+    "State of the right hand 6 dof"
 
     def build_low_level_state(self) -> np.ndarray:
         """Build a low-dimensional state representation for policy input."""
-        return np.concatenate([self.left_arm_state, self.right_arm_state])
+        return np.concatenate([self.left_arm_state, self.right_arm_state, self.left_hand_state, self.right_hand_state])
 
 
 class G1RobotInterface(BaseRobot):
@@ -61,7 +66,8 @@ class G1RobotInterface(BaseRobot):
             )  # dds domain id
         print(dds_domain_id)
         ik_config = G1IKConfigSim() if simulation else G1IKConfigReal()
-        self.controller = G1_29_ArmController(motion_mode=True, simulation_mode=simulation, sub_mode=False)
+        self.controller = G1_29_ArmController(motion_mode=False, simulation_mode=simulation, sub_mode=False)
+        self.hand_controller = Inspire_Controller_FTP()
         self.visualizer = visualizer
         self.ik_visualizer = ik_visualizer
         self.q0 = self.controller.get_current_dual_arm_q()
@@ -170,7 +176,8 @@ class G1RobotInterface(BaseRobot):
         pos_l, rot_l = transforms_utils.extract_robot_pos_orien(X_WL)
         pos_r, rot_r = transforms_utils.extract_robot_pos_orien(X_WR)
 
-        # PENDING GET HANDS
+        left_hand_state, right_hand_state = self.hand_controller.get_state()
+
         return RobotState(
             q=q,
             q_arm=q_arm,
@@ -178,6 +185,8 @@ class G1RobotInterface(BaseRobot):
             X_WR=X_WR,
             left_arm_state=np.concatenate([pos_l, rot_l]),
             right_arm_state=np.concatenate([pos_r, rot_r]),
+            left_hand_state=left_hand_state,
+            right_hand_state=right_hand_state,
         )
 
     def set_ee_targets(self, left, right) -> None:

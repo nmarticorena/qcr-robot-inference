@@ -128,7 +128,8 @@ class G1ArmsDataConfig(DataConfig):
         "left_robot_orien",
         "right_robot_pos",
         "right_robot_orien",
-        "progress",
+        "left_hand_state",
+        "right_hand_state",
     )
 
     action_keys: tuple[str, ...] = (
@@ -136,6 +137,9 @@ class G1ArmsDataConfig(DataConfig):
         "left_action_orien",
         "right_action_pos",
         "right_action_orien",
+        "left_hand_action",
+        "right_hand_action",
+        "progress",
     )
 
     vision: VisionConfig = field(default_factory=G1VisionConfig)
