@@ -38,10 +38,14 @@ class RobotState:
     "Concatenated position and orientation (6D) for the left arm end-effector"
     right_arm_state: np.ndarray
     "Concatenated position and orientation (6D) for the right arm end-effector"
+    left_hand_state: np.ndarray
+    "State of the left hand 7 dof"
+    right_hand_state: np.ndarray
+    "State of the right hand 7 dof"
 
     def build_low_level_state(self) -> np.ndarray:
         """Build a low-dimensional state representation for policy input."""
-        return np.concatenate([self.left_arm_state, self.right_arm_state])
+        return np.concatenate([self.left_arm_state, self.right_arm_state, self.left_hand_state, self.right_hand_state])
 
 
 class G1RobotInterface(BaseRobot):
