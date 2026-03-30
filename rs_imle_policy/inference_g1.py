@@ -1,7 +1,7 @@
 import collections
+import os
 from collections import defaultdict
 import time
-from dataclasses import dataclass
 from typing import Tuple
 
 import torch
@@ -12,7 +12,6 @@ import reactivex as rx
 from reactivex.scheduler import NewThreadScheduler
 from reactivex import operators as ops
 import spatialmath as sm
-import pinocchio as pin
 
 from teleimager.image_client import ImageClient
 from motion_tools.robot_gui import ReRunRobot
@@ -23,17 +22,10 @@ from rs_imle_policy.configs.train_config import (
     RSIMLE,
 )
 
-from unitree_sdk2py.core.channel import ChannelFactoryInitialize
-
-# For simulation
-from unitree_sdk2py.core.channel import ChannelPublisher
-from unitree_sdk2py.idl.std_msgs.msg.dds_ import String_
-
 import rs_imle_policy.utils.transforms as transforms_utils
 from rs_imle_policy.policy import Policy
-from rs_imle_policy.unitree import G1_29_ArmController
-from rs_imle_policy.g1_arm_ik import G1ReducedPinkIK
 from rs_imle_policy.datasets.base_dataset import normalize_data, unnormalize_data
+from rs_imle_policy.robots.g1 import G1RobotInterface
 
 # Constants
 DEFAULT_SEED = 42
@@ -45,11 +37,6 @@ GRIPPER_CLOSE_THRESHOLD = 0.5
 PROGRESS_COMPLETE_THRESHOLD = 0.95
 OBSERVATION_WAIT_TIME_MS = 1
 INFERENCE_TARGET_DT_MULTIPLIER = 4
-
-
-def publish_reset_category(category: int, publisher):  # Scene Reset signal
-    msg = String_(data=str(category))
-    publisher.Write(msg)
 
 
 class PerceptionSystem:
@@ -101,15 +88,15 @@ class G1ArmsInferenceController:
         self.rec = rr.RecordingStream(f"g1_arms_inference_{eval_name}")
         self.rec.spawn()
         self.rerun_gui = ReRunRobot.g1(self.rec, target_frame="pelvis")
+        self.rerun_left_hand = ReRunRobot.left_ftp_hand(self.rec)
+        self.rerun_right_hand = ReRunRobot.right_ftp_hand(self.rec)
 
         self.rerun_ik = ReRunRobot.g1_debug(self.rec, target_frame="pelvis")
 
         self.rerun_ik.apply_color([0, 1, 0, 0.5])
         self.all_frames = defaultdict(list)
 
-        self.perception_system = PerceptionSystem(
-            "vlu-isaacsim.qut.edu.au", 60001
-        )  # TODO: Need to get this from config
+        self.perception_system = PerceptionSystem(os.environ["G1_IP"], 60001)  # TODO: Need to get this from config
         self.robot = G1RobotInterface(simulation)
         self.setup_diffusion_policy()
 
@@ -221,7 +208,7 @@ class G1ArmsInferenceController:
         return {"action": action}
 
     @torch.no_grad()
-    def convert_actions(self, action) -> Tuple[list[sm.SE3], list[sm.SE3], np.ndarray]:
+    def convert_actions(self, action) -> Tuple[list[sm.SE3], list[sm.SE3], np.ndarray, np.ndarray, np.ndarray]:
         """
         Convert the raw action output from the policy into translation and rotation commands for the robot.
         Args:
@@ -231,12 +218,15 @@ class G1ArmsInferenceController:
         l_r = action[:, 3:9]
         r_t = action[:, 9:12]
         r_r = action[:, 12:18]
-        progress = action[:, 18:]
+        l_hand = action[:, 18:24]
+        r_hand = action[:, 24:30]
+
+        progress = action[:, 30:]
 
         left_poses = transforms_utils.pos_rot_to_se3(torch.from_numpy(l_t), torch.from_numpy(l_r))
         right_poses = transforms_utils.pos_rot_to_se3(torch.from_numpy(r_t), torch.from_numpy(r_r))
 
-        return left_poses, right_poses, progress
+        return left_poses, right_poses, l_hand, r_hand, progress
 
     @torch.no_grad()  # Might be unncessary
     def inference_loop(self):
@@ -262,21 +252,25 @@ class G1ArmsInferenceController:
 
             print("elapsed time: ", time.time() - start_time)
 
-            X_WL, X_WR, progress = self.convert_actions(action)
+            X_WL, X_WR, left_hand, right_hand, progress = self.convert_actions(action)
 
             n_actions = int(len(action) / 2)
-            X_WL = X_WL[n_actions:]
-            X_WR = X_WR[n_actions:]
-            progress = progress[n_actions:]
+            X_WL = X_WL[:n_actions]
+            X_WR = X_WR[:n_actions]
+            progress = progress[:n_actions]
+            left_hand_actions = left_hand[:n_actions]
+            right_hand_actions = right_hand[:n_actions]
 
             self.rerun_gui.rec.log("/plots/progress", rr.Scalars(progress[-1]))
 
             for pose_index, (x_wl, x_wr) in enumerate(zip(X_WL, X_WR)):
-                pass
                 self.rerun_gui.log_se3_transform(f"left_ee/{pose_index}", x_wl)
                 self.rerun_gui.log_se3_transform(f"right_ee/{pose_index}", x_wr)
 
             for actions_index in range(n_actions):
+                x_wl = X_WL[actions_index] @ sm.SE3(0.05, 0, 0)
+                x_wr = X_WR[actions_index] @ sm.SE3(0.05, 0, 0)
+
                 self.robot.set_ee_targets(X_WL[actions_index].A, X_WR[actions_index].A)
                 for _ in range(1):
                     q_sol = self.robot.step_servo()
@@ -284,6 +278,12 @@ class G1ArmsInferenceController:
                     full_q_sol[15:29] = q_sol
 
                     self.rerun_ik.log(full_q_sol)
+
+                # Send hand command in sync with arm step
+                left_hand = left_hand_actions[actions_index]  # [0,1] normalized
+                right_hand = right_hand_actions[actions_index]  # [0,1] normalized
+                self.robot.hand_controller.policy_to_hand_command(left_hand, right_hand)
+                time.sleep(INFERENCE_TARGET_DT_MULTIPLIER * 0.05)
 
             if progress[0] >= PROGRESS_COMPLETE_THRESHOLD:
                 self.done = True
@@ -297,112 +297,3 @@ class G1ArmsInferenceController:
                 print("Timeout reached, ending inference.")
                 # obs_stream.dispose()
                 self.done = True
-
-
-@dataclass
-class RobotState:
-    q: np.ndarray
-    "Joint positions for the entire robot"
-    q_arm: np.ndarray
-    "Joint positions for the arms only"
-    X_WL: sm.SE3
-    "End-effector pose for the left arm in world frame"
-    X_WR: sm.SE3
-    "End-effector pose for the right arm in world frame"
-    left_arm_state: np.ndarray
-    "Concatenated position and orientation (6D) for the left arm end-effector"
-    right_arm_state: np.ndarray
-    "Concatenated position and orientation (6D) for the right arm end-effector"
-
-    def build_low_level_state(self) -> np.ndarray:
-        """Build a low-dimensional state representation for policy input."""
-        return np.concatenate([self.left_arm_state, self.right_arm_state])
-
-
-class G1RobotInterface:
-    def __init__(self, simulation: bool = True):
-        dds_domain_id = 1 if simulation else 0
-        ChannelFactoryInitialize(id=dds_domain_id)  # dds domain id
-        self.controller = G1_29_ArmController(motion_mode=False, simulation_mode=simulation)
-        # self.q0 = self.controller.get_current_dual_arm_q()
-        self.q0 = np.zeros_like(self.controller.get_current_dual_arm_q())
-        self.ik_solver = G1ReducedPinkIK(
-            urdf_path="assets/g1.urdf",
-            mesh_dirs=["assets/"],
-            srdf_path="assets/g1.srdf",
-            visualize=False,
-            spawn_visualizer=False,
-            enable_self_collision=False,
-            q0=self.q0,
-        )
-        targets = self.ik_solver.get_targets_from_configuration()
-        self.ik_solver.set_targets(targets.left, targets.right)
-        if simulation:
-            self.reset_pose_publisher = ChannelPublisher("rt/reset_pose/cmd", String_)
-            self.reset_pose_publisher.Init()
-
-    def reset_sim(self):
-        print("Resetting simulation to initial pose")
-        self.reset_arm()
-        publish_reset_category(1, self.reset_pose_publisher)
-
-    def reset_arm(self):
-        q_sol = self.q0.copy()
-        q_current = self.controller.get_current_dual_arm_q()
-
-        while np.linalg.norm(q_sol - q_current) > 0.1:
-            q_tauff = pin.rnea(
-                self.ik_solver.robot.model,
-                self.ik_solver.robot.data,
-                q_sol,
-                np.zeros(self.ik_solver.robot.model.nv),
-                np.zeros(self.ik_solver.robot.model.nv),
-            )
-            self.controller.ctrl_dual_arm(q_sol, q_tauff)
-            time.sleep(0.01)
-            q_current = self.controller.get_current_dual_arm_q()
-            print("Resetting arms, current error: ", np.linalg.norm(q_sol - q_current))
-
-    def get_state(self) -> RobotState:
-        """
-        Get the current state of the robot, including joint positions and end-effector poses.
-        Return:
-            RobotState: A dataclass containing the robot's joint positions, end-effector poses, and low-level state representation.
-        """
-        q = self.controller.get_current_motor_q()
-        q_arm = self.controller.get_current_dual_arm_q()
-
-        poses = self.ik_solver.get_ee_poses(q_arm)
-        X_WL = poses.left.homogeneous
-        X_WR = poses.right.homogeneous
-
-        pos_l, rot_l = transforms_utils.extract_robot_pos_orien(X_WL)
-        pos_r, rot_r = transforms_utils.extract_robot_pos_orien(X_WR)
-
-        # PENDING GET HANDS
-        return RobotState(
-            q=q,
-            q_arm=q_arm,
-            X_WL=X_WL,
-            X_WR=X_WR,
-            left_arm_state=np.concatenate([pos_l, rot_l]),
-            right_arm_state=np.concatenate([pos_r, rot_r]),
-        )
-
-    def set_ee_targets(self, left, right) -> None:
-        self.ik_solver.set_targets(left, right)
-
-    def step_servo(self, dt: float = 1 / 200) -> np.ndarray:
-        q_arm = self.controller.get_current_dual_arm_q()
-        self.ik_solver.configuration.update(q_arm.copy())
-
-        q_sol = self.ik_solver.solve(dt=dt, n_steps=1)
-        q_tauff = pin.rnea(
-            self.ik_solver.robot.model,
-            self.ik_solver.robot.data,
-            q_sol,
-            np.zeros(self.ik_solver.robot.model.nv),
-            np.zeros(self.ik_solver.robot.model.nv),
-        )
-        self.controller.ctrl_dual_arm(q_sol, q_tauff)
-        return q_sol
