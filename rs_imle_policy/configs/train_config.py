@@ -146,6 +146,46 @@ class G1ArmsDataConfig(DataConfig):
 
 
 @dataclass
+class G1LeftArmDataConfig(DataConfig):
+    """Data configuration for G1 left arm dataset"""
+
+    lowdim_obs_keys: tuple[str, ...] = (
+        "left_robot_pos",
+        "left_robot_orien",
+        "left_hand_state",
+    )
+
+    action_keys: tuple[str, ...] = (
+        "left_action_pos",
+        "left_action_orien",
+        "left_hand_action",
+        "progress",
+    )
+
+    vision: VisionConfig = field(default_factory=G1VisionConfig)
+
+
+@dataclass
+class G1RightArmDataConfig(DataConfig):
+    """Data configuration for G1 right arm dataset"""
+
+    lowdim_obs_keys: tuple[str, ...] = (
+        "right_robot_pos",
+        "right_robot_orien",
+        "right_hand_state",
+    )
+
+    action_keys: tuple[str, ...] = (
+        "right_action_pos",
+        "right_action_orien",
+        "right_hand_action",
+        "progress",
+    )
+
+    vision: VisionConfig = field(default_factory=G1VisionConfig)
+
+
+@dataclass
 class OptimConfig:
     """Optimization and training parameters"""
 
