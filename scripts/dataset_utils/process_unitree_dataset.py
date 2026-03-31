@@ -12,7 +12,11 @@ def convert_to_h5(dataset_path: str, /, vision_config: G1VisionConfig):
     # Open an HDF5 file in write mode
     with h5py.File(dataset_name, "w") as h5f:
         episodes = sorted(
-            os.listdir(os.path.join(dataset_path, "episodes")),
+            [
+                x
+                for x in os.listdir(os.path.join(dataset_path, "episodes"))
+                if not x.startswith(".") and x.startswith("episode_")
+            ],
             key=lambda x: int(x.split("_")[-1]),
         )
         for episode in tqdm.tqdm(episodes):

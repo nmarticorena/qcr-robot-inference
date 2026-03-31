@@ -69,8 +69,12 @@ class G1ArmsDataset(BaseDataset):
         """
         rlds = {}
         episodes = sorted(
-            os.listdir(os.path.join(self.dataset_path, "episodes")),
-            key=lambda x: int(x.split("_")[1]),
+            [
+                x
+                for x in os.listdir(os.path.join(self.dataset_path, "episodes"))
+                if not x.startswith(".") and x.startswith("episode_")
+            ],
+            key=lambda x: int(x.split("_")[-1]),
         )
 
         for episode_index, episode in enumerate(episodes):
