@@ -27,6 +27,21 @@ rsync -avz  \
     nmarticorena@rllab.qut.edu.au:/home/nmarticorena/real-robot-inference/{{ exp_name }}/
 """
 
+[tasks.copy_unitree]
+args = [
+    { arg = "exp_name" },
+]
+cmd = """
+rsync -avz  \
+    --rsync-path='/home/vlu/.pixi/bin/rsync' \
+    --include='*.yaml' \
+    --include='*last*' \
+    --include='*.pkl' \
+    --exclude='*' \
+    {{ exp_name }}/ \
+    vlu@vlu-isaacsim.qut.edu.au:/home/vlu/qcr-robot-inference/{{ exp_name }}/
+"""
+
 [tasks.sync_datasets]
 cmd = "rsync -avz --ignore-existing nmarticorena@rllab.qut.edu.au:/home/nmarticorena/panda_dc/data/ data/"
 
