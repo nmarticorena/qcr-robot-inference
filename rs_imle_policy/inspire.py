@@ -32,17 +32,17 @@ class Inspire_Controller_FTP:
         self.Unit_Test = Unit_Test
         self.simulation_mode = simulation_mode
 
-        self.left_hand_array = Array("d", 12, lock=True)  # [input]
-        self.right_hand_array = Array("d", 12, lock=True)  # [input]
+        self.left_hand_array = Array("d", 6, lock=True)  # [input]
+        self.right_hand_array = Array("d", 6, lock=True)  # [input]
         self.dual_hand_data_lock = Lock()
         self.dual_hand_state_array = Array("d", 12, lock=False)  # [output] current left, right hand state(12) data.
         self.dual_hand_action_array = Array("d", 12, lock=False)  # [output] current left, right hand action(12) data.
 
         # Initialize desired command to fully open
         with self.left_hand_array.get_lock():
-            self.left_hand_array[:] = [1.0] * Inspire_Num_Motors
+            self.left_hand_array[:] = np.full(Inspire_Num_Motors, 1.0)
         with self.right_hand_array.get_lock():
-            self.right_hand_array[:] = [1.0] * Inspire_Num_Motors
+            self.right_hand_array[:] = np.full(Inspire_Num_Motors, 1.0)
 
         # Initialize hand command publishers
         self.LeftHandCmd_publisher = ChannelPublisher(kTopicInspireFTPLeftCommand, inspire_dds.inspire_hand_ctrl)
