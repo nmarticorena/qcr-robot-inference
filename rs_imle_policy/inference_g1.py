@@ -2,7 +2,7 @@ import collections
 import os
 from collections import defaultdict
 import time
-from typing import Tuple
+from typing import Tuple, Optional
 
 import torch
 import cv2
@@ -73,10 +73,12 @@ class G1ArmsInferenceController:
     def __init__(
         self,
         config: ExperimentConfig,
+        rec: rr.RecordingStream,
         eval_name: str,
         timeout: int,
         dry_run: bool = False,
         simulation: bool = True,
+        home: Optional[np.ndarray] = None,
     ):
         self.infer_idx = 0
         self.config = config
@@ -84,9 +86,10 @@ class G1ArmsInferenceController:
         self.timeout = timeout
         self.dry_run = dry_run
         self.simulation = simulation
+        self.rec = rec
 
-        self.rec = rr.RecordingStream(f"g1_arms_inference_{eval_name}")
-        self.rec.spawn()
+        # self.rec = rr.RecordingStream(f"g1_arms_inference_{eval_name}")
+        # self.rec.spawn()
         self.rerun_gui = ReRunRobot.g1(self.rec, target_frame="pelvis")
         self.rerun_left_hand = ReRunRobot.left_ftp_hand(self.rec)
         self.rerun_right_hand = ReRunRobot.right_ftp_hand(self.rec)
@@ -97,7 +100,7 @@ class G1ArmsInferenceController:
         self.all_frames = defaultdict(list)
 
         self.perception_system = PerceptionSystem(os.environ["G1_IP"], 60000)  # TODO: Need to get this from config
-        self.robot = G1RobotInterface(simulation)
+        self.robot = G1RobotInterface(simulation, home = home)
         self.setup_diffusion_policy()
 
     def run_experiments(self, episodes: int):
@@ -110,6 +113,8 @@ class G1ArmsInferenceController:
             self.idx = i
             print(f"Starting episode {i + 1}/{episodes}")
             self.done = False
+            self.robot.open_hands()
+            self.robot.move_to_start()
             if not self.simulation:
                 input("Press Enter to start the next episode...")
             else:
@@ -125,7 +130,7 @@ class G1ArmsInferenceController:
         for ix, cam_name in enumerate(self.config.data.vision.cameras):
             frames[cam_name] = images[ix]["color"]
             self.all_frames[cam_name].append(images[ix]["color"])
-            self.rerun_gui.rec.log("cameras/{}".format(cam_name), rr.Image(frames[cam_name]).compress(80))
+            self.rerun_gui.rec.log("cameras/{}".format(cam_name), rr.Image(images[ix]["rgb"]).compress(80))
 
         self.rerun_gui.log(state.q)
         low_level_state = state.build_low_level_state()
@@ -177,6 +182,7 @@ class G1ArmsInferenceController:
                 input_image = torch.stack([self.policy.transform(img) for img in image])
                 feat = encoders[f"vision_encoder_{cam_name}"](input_image.to(device, dtype))
                 image_features.append(feat)
+                print("getting_image_feature", cam_name)
 
         obs_features = torch.cat(image_features + [nagent_pos], dim=-1)
         obs_cond = obs_features.unsqueeze(0).flatten(start_dim=1)
@@ -238,7 +244,6 @@ class G1ArmsInferenceController:
         )
         start_time = time.time()
 
-        time.sleep(0.5)
 
         while not self.done:
             while len(self.obs_deque) < self.obs_horizon:
@@ -254,14 +259,14 @@ class G1ArmsInferenceController:
 
             X_WL, X_WR, left_hand, right_hand, progress = self.convert_actions(action)
 
-            n_actions = int(len(action) / 2)
+            n_actions = int(len(action))
             X_WL = X_WL[:n_actions]
             X_WR = X_WR[:n_actions]
             progress = progress[:n_actions]
             left_hand_actions = left_hand[:n_actions]
             right_hand_actions = right_hand[:n_actions]
 
-            self.rerun_gui.rec.log("/plots/progress", rr.Scalars(progress[-1]))
+            self.rerun_gui.rec.log("/state/progress", rr.Scalars(progress[-1]))
 
             for pose_index, (x_wl, x_wr) in enumerate(zip(X_WL, X_WR)):
                 self.rerun_gui.log_se3_transform(f"left_ee/{pose_index}", x_wl)
@@ -283,7 +288,10 @@ class G1ArmsInferenceController:
                 left_hand = left_hand_actions[actions_index]  # [0,1] normalized
                 right_hand = right_hand_actions[actions_index]  # [0,1] normalized
                 self.robot.hand_controller.policy_to_hand_command(left_hand, right_hand)
-                time.sleep(INFERENCE_TARGET_DT_MULTIPLIER * 0.05)
+                self.rerun_gui.rec.log("state/left_hand_action", rr.Scalars(left_hand))
+                time.sleep(0.1)
+                # self.rerun_gui.rec.log("state/rigth_hand_action", rr.Scalars(right_hand))
+                # time.sleep(INFERENCE_TARGET_DT_MULTIPLIER * 0.05)
 
             if progress[0] >= PROGRESS_COMPLETE_THRESHOLD:
                 self.done = True
