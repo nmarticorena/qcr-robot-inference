@@ -55,6 +55,8 @@ class G1RobotInterface(BaseRobot):
         simulation: bool = True,
         visualizer: Optional[ReRunRobot] = None,
         ik_visualizer: Optional[ReRunRobot] = None,
+        init_arms: bool = True, # Perform the pose sequence
+        home: Optional[np.ndarray] = None
     ):
         self.simulation = simulation
         dds_domain_id = 1 if simulation else 0
@@ -70,23 +72,43 @@ class G1RobotInterface(BaseRobot):
         self.hand_controller = Inspire_Controller_FTP()
         self.visualizer = visualizer
         self.ik_visualizer = ik_visualizer
-        self.q0 = self.controller.get_current_dual_arm_q()
+        q0 = self.controller.get_current_dual_arm_q()
         if self.visualizer is not None:
-            q0 = self.controller.get_current_motor_q()
             self.visualizer.log(q0)
         self.ik_solver = G1ReducedPinkIK(
             config=ik_config,
             visualize=False,
             spawn_visualizer=False,
-            q0=self.q0.copy(),
+            q0=q0.copy(),
         )
-        breakpoint()
+        if home is not None:
+            self.q0 = home
+        else:
+            self.q0 = np.array([0.2704000771045685,
+                0.0013576820492744446,
+                0.2545928955078125,
+                -0.3546012341976166,
+                0.06759103387594223,
+                -0.185650035738945,
+                0.13262797892093658,
+                0.320865660905838,
+                -0.04468065872788429,
+                -0.693587064743042,
+                0.0640556812286377,
+                0.1738431751728058,
+                -0.7749748229980469,
+                -0.1289234161376953
+                ])
+
         pairs = self.ik_solver.get_closest_collision_pairs(n=20)
         for dist, a, b in pairs:
             print(f"{dist:.4f}m  {a}  <->  {b}")
         targets = self.ik_solver.get_targets_from_configuration()
         self.ik_solver.set_targets(targets.left, targets.right)
-        self.init_arms()
+
+        if init_arms:
+            self.init_arms()
+            self.move_to_start()
         if simulation:
             self.reset_pose_publisher = ChannelPublisher("rt/reset_pose/cmd", String_)
             self.reset_pose_publisher.Init()
@@ -102,6 +124,7 @@ class G1RobotInterface(BaseRobot):
         self.ik_solver.remove_position_barrier()
         # Perform init sequence
         print("Initializing arms to starting configuration")
+        #TODO: add the name here as part of the config
         with open("startup_g1.json", "r") as f:
             startup_config = json.load(f)
         waypoints = startup_config["waypoints"]
@@ -141,24 +164,67 @@ class G1RobotInterface(BaseRobot):
                 time.sleep(0.01)
 
         self.ik_solver._setup_barriers()
-        self.q0 = self.controller.get_current_dual_arm_q()
+        # self.q0 = self.controller.get_current_dual_arm_q()
 
-    def move_to_start(self, home_config=np.zeros(14)):
-        q_sol = self.q0
-        q_current = self.controller.get_current_dual_arm_q()
+    def move_to_start(
+        self,
+        home = None,
+        max_vel=0.5,          # rad/s (can be scalar or per-joint array)
+        dt=0.001,
+    ):
+        q_start = self.controller.get_current_dual_arm_q().copy()
+        if home is None:
+            q_goal = self.q0  # or home_config
+        else:
+            q_goal = home
 
-        while np.linalg.norm(q_sol - q_current) > 0.1:
+        model = self.ik_solver.robot.model
+        data = self.ik_solver.robot.data
+        nv = model.nv
+
+        # Ensure max_vel is per-joint
+        max_vel = np.asarray(max_vel)
+        if max_vel.ndim == 0:
+            max_vel = np.ones_like(q_start) * max_vel
+
+        # Compute required duration per joint
+        delta_q = np.abs(q_goal - q_start)
+        duration = np.max(delta_q / (max_vel + 1e-8))
+
+        n_steps = max(1, int(duration / dt))
+
+        for i in range(n_steps + 1):
+            alpha = i / n_steps
+
+            # Smooth time scaling (zero vel at start/end)
+            s = 3 * alpha**2 - 2 * alpha**3
+
+            q_target = (1.0 - s) * q_start + s * q_goal
+
             q_tauff = pin.rnea(
-                self.ik_solver.robot.model,
-                self.ik_solver.robot.data,
-                q_sol,
-                np.zeros(self.ik_solver.robot.model.nv),
-                np.zeros(self.ik_solver.robot.model.nv),
+                model,
+                data,
+                q_target,
+                np.zeros(nv),
+                np.zeros(nv),
             )
-            self.controller.ctrl_dual_arm(q_sol, q_tauff)
-            time.sleep(0.01)
-            q_current = self.controller.get_current_dual_arm_q()
-            print("Resetting arms, current error: ", np.linalg.norm(q_sol - q_current))
+
+            self.controller.ctrl_dual_arm(q_target, q_tauff)
+
+            err = np.linalg.norm(q_goal - self.controller.get_current_dual_arm_q())
+            print(f"Moving to start | t={alpha*duration:.3f}s | error={err:.4f}")
+
+            time.sleep(dt)
+
+    def open_hands(self):
+        print("Opening hands")
+        l_q, r_q = self.hand_controller.get_state()
+        l_target = np.ones(6)
+        r_target = np.ones(6)
+        self.hand_controller.set_command(l_target, r_target)
+        while np.linalg.norm(l_q - l_target) > 0.1 and np.linalg.norm(r_q - r_target) > 0.1:
+            l_q, r_q = self.hand_controller.get_state()
+
 
     def get_state(self) -> RobotState:
         """
