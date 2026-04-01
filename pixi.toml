@@ -45,6 +45,9 @@ rsync -avz  \
 [tasks.sync_datasets]
 cmd = "rsync -avz --ignore-existing nmarticorena@rllab.qut.edu.au:/home/nmarticorena/panda_dc/data/ data/"
 
+[tasks.reset_g1]
+cmd = "python3 scripts/reset_g1.py"
+
 [system-requirements]
 cuda = "12.4"
 
