@@ -27,6 +27,9 @@ rsync -avz  \
     nmarticorena@rllab.qut.edu.au:/home/nmarticorena/real-robot-inference/{{ exp_name }}/
 """
 
+[tasks.list_experiments]
+cmd = "ls -d saved_weights/*/ | xargs -I{} basename {}"
+
 [tasks.copy_unitree]
 args = [
     { arg = "exp_name" },
@@ -34,6 +37,7 @@ args = [
 cmd = """
 rsync -avz  \
     --rsync-path='/home/vlu/.pixi/bin/rsync' \
+    --mkpath \
     --include='*.yaml' \
     --include='*last*' \
     --include='*.pkl' \
