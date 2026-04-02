@@ -238,9 +238,6 @@ class G1RobotInterface(BaseRobot):
 
             self.controller.ctrl_dual_arm(q_target, q_tauff)
 
-            err = np.linalg.norm(q_goal - self.controller.get_current_dual_arm_q())
-            print(f"Moving to start | t={alpha*duration:.3f}s | error={err:.4f}")
-
             time.sleep(dt)
 
     def open_hands(self):
@@ -286,9 +283,9 @@ class G1RobotInterface(BaseRobot):
         self.ik_solver.set_targets(left, right)
 
     def step_servo(self, dt: float = 1 / 200) -> np.ndarray:
-        pairs = self.ik_solver.get_closest_collision_pairs(n=1)
-        for dist, a, b in pairs:
-            print(f"{dist:.4f}m  {a}  <->  {b}")
+        # pairs = self.ik_solver.get_closest_collision_pairs(n=1)
+        # for dist, a, b in pairs:
+        #     print(f"{dist:.4f}m  {a}  <->  {b}")
         q_arm = self.controller.get_current_dual_arm_q()
         q = self.controller.get_current_motor_q()
         self.ik_solver.configuration.update(q_arm.copy())
