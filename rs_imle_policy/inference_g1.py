@@ -2,7 +2,7 @@ import collections
 import os
 from collections import defaultdict
 import time
-from typing import Tuple
+from typing import Tuple, Optional
 
 import torch
 import cv2
@@ -37,6 +37,20 @@ GRIPPER_CLOSE_THRESHOLD = 0.5
 PROGRESS_COMPLETE_THRESHOLD = 0.95
 OBSERVATION_WAIT_TIME_MS = 1
 INFERENCE_TARGET_DT_MULTIPLIER = 4
+
+ACTION_KEY_DIMS = {
+    "left_action_pos": 3,
+    "left_action_orien": 6,
+    "right_action_pos": 3,
+    "right_action_orien": 6,
+    "left_relative_pos": 3,
+    "left_relative_orien": 6,
+    "right_relative_pos": 3,
+    "right_relative_orien": 6,
+    "left_hand_action": 6,
+    "right_hand_action": 6,
+    "progress": 1,
+}
 
 
 class PerceptionSystem:
@@ -73,10 +87,12 @@ class G1ArmsInferenceController:
     def __init__(
         self,
         config: ExperimentConfig,
+        rec: rr.RecordingStream,
         eval_name: str,
         timeout: int,
         dry_run: bool = False,
         simulation: bool = True,
+        home: Optional[np.ndarray] = None,
     ):
         self.infer_idx = 0
         self.config = config
@@ -84,9 +100,11 @@ class G1ArmsInferenceController:
         self.timeout = timeout
         self.dry_run = dry_run
         self.simulation = simulation
+        self.rec = rec
+        self.latest_state = None
 
-        self.rec = rr.RecordingStream(f"g1_arms_inference_{eval_name}")
-        self.rec.spawn()
+        # self.rec = rr.RecordingStream(f"g1_arms_inference_{eval_name}")
+        # self.rec.spawn()
         self.rerun_gui = ReRunRobot.g1(self.rec, target_frame="pelvis")
         self.rerun_left_hand = ReRunRobot.left_ftp_hand(self.rec)
         self.rerun_right_hand = ReRunRobot.right_ftp_hand(self.rec)
@@ -97,7 +115,7 @@ class G1ArmsInferenceController:
         self.all_frames = defaultdict(list)
 
         self.perception_system = PerceptionSystem(os.environ["G1_IP"], 60000)  # TODO: Need to get this from config
-        self.robot = G1RobotInterface(simulation)
+        self.robot = G1RobotInterface(simulation, home = home)
         self.setup_diffusion_policy()
 
     def run_experiments(self, episodes: int):
@@ -110,6 +128,8 @@ class G1ArmsInferenceController:
             self.idx = i
             print(f"Starting episode {i + 1}/{episodes}")
             self.done = False
+            self.robot.open_hands()
+            self.robot.move_to_start()
             if not self.simulation:
                 input("Press Enter to start the next episode...")
             else:
@@ -120,15 +140,16 @@ class G1ArmsInferenceController:
 
     def get_observation(self):
         state = self.robot.get_state()
+        self.latest_state = state
         images = self.perception_system.get()
         frames = {}
         for ix, cam_name in enumerate(self.config.data.vision.cameras):
             frames[cam_name] = images[ix]["color"]
             self.all_frames[cam_name].append(images[ix]["color"])
-            self.rerun_gui.rec.log("cameras/{}".format(cam_name), rr.Image(frames[cam_name]).compress(80))
+            self.rerun_gui.rec.log("cameras/{}".format(cam_name), rr.Image(images[ix]["rgb"]).compress(80))
 
         self.rerun_gui.log(state.q)
-        low_level_state = state.build_low_level_state()
+        low_level_state = state.build_low_level_state(self.config.data.lowdim_obs_keys)
 
         return {"state": low_level_state, **frames}
 
@@ -177,6 +198,7 @@ class G1ArmsInferenceController:
                 input_image = torch.stack([self.policy.transform(img) for img in image])
                 feat = encoders[f"vision_encoder_{cam_name}"](input_image.to(device, dtype))
                 image_features.append(feat)
+                print("getting_image_feature", cam_name)
 
         obs_features = torch.cat(image_features + [nagent_pos], dim=-1)
         obs_cond = obs_features.unsqueeze(0).flatten(start_dim=1)
@@ -207,26 +229,82 @@ class G1ArmsInferenceController:
 
         return {"action": action}
 
+    def _split_action_parts(self, action: np.ndarray) -> dict[str, np.ndarray]:
+        parts = {}
+        start = 0
+        for key in self.config.data.action_keys:
+            if key not in ACTION_KEY_DIMS:
+                supported_keys = ", ".join(sorted(ACTION_KEY_DIMS))
+                raise KeyError(f"Unsupported action key '{key}'. Supported keys: {supported_keys}")
+            end = start + ACTION_KEY_DIMS[key]
+            parts[key] = action[:, start:end]
+            start = end
+
+        if start != action.shape[1]:
+            raise ValueError(
+                f"Decoded {start} action dimensions from keys {self.config.data.action_keys}, "
+                f"but model output has {action.shape[1]} dimensions."
+            )
+        return parts
+
+    def _repeat_pose(self, pose_matrix: np.ndarray, n_actions: int) -> list[sm.SE3]:
+        return [sm.SE3(pose_matrix.copy()) for _ in range(n_actions)]
+
+    def _resolve_arm_poses(self, parts: dict[str, np.ndarray], side: str, current_pose: np.ndarray, n_actions: int) -> list[sm.SE3]:
+        abs_pos_key = f"{side}_action_pos"
+        abs_orien_key = f"{side}_action_orien"
+        rel_pos_key = f"{side}_relative_pos"
+        rel_orien_key = f"{side}_relative_orien"
+
+        has_abs = abs_pos_key in parts or abs_orien_key in parts
+        has_rel = rel_pos_key in parts or rel_orien_key in parts
+
+        if has_abs and (abs_pos_key not in parts or abs_orien_key not in parts):
+            raise KeyError(f"Both {abs_pos_key} and {abs_orien_key} are required together.")
+        if has_rel and (rel_pos_key not in parts or rel_orien_key not in parts):
+            raise KeyError(f"Both {rel_pos_key} and {rel_orien_key} are required together.")
+        if has_abs and has_rel:
+            raise KeyError(f"Action keys for {side} arm cannot mix absolute and relative targets.")
+
+        if has_abs:
+            return transforms_utils.pos_rot_to_se3(
+                torch.from_numpy(parts[abs_pos_key]),
+                torch.from_numpy(parts[abs_orien_key]),
+            )
+
+        if has_rel:
+            relative_poses = transforms_utils.pos_rot_to_se3(
+                torch.from_numpy(parts[rel_pos_key]),
+                torch.from_numpy(parts[rel_orien_key]),
+            )
+            current = sm.SE3(current_pose.copy())
+            return [current * rel_pose for rel_pose in relative_poses]
+
+        return self._repeat_pose(current_pose, n_actions)
+
     @torch.no_grad()
     def convert_actions(self, action) -> Tuple[list[sm.SE3], list[sm.SE3], np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Convert the raw action output from the policy into translation and rotation commands for the robot.
-        Args:
-            action:[n,19] Raw action output from the policy, expected to contain position and orientation components.
-        """
-        l_t = action[:, 0:3]
-        l_r = action[:, 3:9]
-        r_t = action[:, 9:12]
-        r_r = action[:, 12:18]
-        l_hand = action[:, 18:24]
-        r_hand = action[:, 24:30]
+        """Convert policy outputs into arm poses and hand commands using configured action keys."""
+        n_actions = int(len(action))
+        current_state = self.latest_state if self.latest_state is not None else self.robot.get_state()
+        parts = self._split_action_parts(action)
 
-        progress = action[:, 30:]
+        left_poses = self._resolve_arm_poses(parts, "left", current_state.X_WL, n_actions)
+        right_poses = self._resolve_arm_poses(parts, "right", current_state.X_WR, n_actions)
 
-        left_poses = transforms_utils.pos_rot_to_se3(torch.from_numpy(l_t), torch.from_numpy(l_r))
-        right_poses = transforms_utils.pos_rot_to_se3(torch.from_numpy(r_t), torch.from_numpy(r_r))
+        if "left_hand_action" in parts:
+            left_hand = parts["left_hand_action"]
+        else:
+            left_hand = np.repeat(current_state.left_hand_state[None, :], n_actions, axis=0)
 
-        return left_poses, right_poses, l_hand, r_hand, progress
+        if "right_hand_action" in parts:
+            right_hand = parts["right_hand_action"]
+        else:
+            right_hand = np.repeat(current_state.right_hand_state[None, :], n_actions, axis=0)
+
+        progress = parts.get("progress", np.zeros((n_actions, 1), dtype=action.dtype))
+
+        return left_poses, right_poses, left_hand, right_hand, progress
 
     @torch.no_grad()  # Might be unncessary
     def inference_loop(self):
@@ -238,7 +316,6 @@ class G1ArmsInferenceController:
         )
         start_time = time.time()
 
-        time.sleep(0.5)
 
         while not self.done:
             while len(self.obs_deque) < self.obs_horizon:
@@ -254,14 +331,14 @@ class G1ArmsInferenceController:
 
             X_WL, X_WR, left_hand, right_hand, progress = self.convert_actions(action)
 
-            n_actions = int(len(action) / 2)
+            n_actions = int(len(action))
             X_WL = X_WL[:n_actions]
             X_WR = X_WR[:n_actions]
             progress = progress[:n_actions]
             left_hand_actions = left_hand[:n_actions]
             right_hand_actions = right_hand[:n_actions]
 
-            self.rerun_gui.rec.log("/plots/progress", rr.Scalars(progress[-1]))
+            self.rerun_gui.rec.log("/state/progress", rr.Scalars(progress[-1]))
 
             for pose_index, (x_wl, x_wr) in enumerate(zip(X_WL, X_WR)):
                 self.rerun_gui.log_se3_transform(f"left_ee/{pose_index}", x_wl)
@@ -283,7 +360,10 @@ class G1ArmsInferenceController:
                 left_hand = left_hand_actions[actions_index]  # [0,1] normalized
                 right_hand = right_hand_actions[actions_index]  # [0,1] normalized
                 self.robot.hand_controller.policy_to_hand_command(left_hand, right_hand)
-                time.sleep(INFERENCE_TARGET_DT_MULTIPLIER * 0.05)
+                self.rerun_gui.rec.log("state/left_hand_action", rr.Scalars(left_hand))
+                time.sleep(0.1)
+                # self.rerun_gui.rec.log("state/rigth_hand_action", rr.Scalars(right_hand))
+                # time.sleep(INFERENCE_TARGET_DT_MULTIPLIER * 0.05)
 
             if progress[0] >= PROGRESS_COMPLETE_THRESHOLD:
                 self.done = True

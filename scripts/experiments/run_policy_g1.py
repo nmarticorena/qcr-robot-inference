@@ -1,6 +1,8 @@
 import re
+import numpy as np
 import os
 import subprocess
+import json
 
 import tyro
 import rerun as rr
@@ -25,9 +27,10 @@ config.epoch = args.epoch
 if isinstance(config.model, RSIMLE):
     config.model.traj_consistency = True
 
-rr.init("Robot Inference ", recording_id=exp_name)
+# rr.init("Robot Inference ", recording_id=exp_name)
+rec = rr.RecordingStream("Robot Inference", recording_id = exp_name)
 os.makedirs(f"saved_evaluation_media/{exp_name}", exist_ok=True)
-rr.save(f"saved_evaluation_media/{exp_name}/rerun_recording.rrd")
+rec.save(f"saved_evaluation_media/{exp_name}/rerun_recording.rrd")
 subprocess.Popen(
     ["rerun", f"saved_evaluation_media/{exp_name}/rerun_recording.rrd"],
     shell=False,
@@ -35,8 +38,11 @@ subprocess.Popen(
     stderr=subprocess.DEVNULL,
 )
 
+with open("home.json", "r") as f:
+    home = np.array(json.load(f)["home"])
+
 controller = G1ArmsInferenceController(
-    config, eval_name=exp_name, timeout=args.timeout, dry_run=args.dry_run, simulation=False
+    config, rec, eval_name=exp_name, timeout=args.timeout, dry_run=args.dry_run, simulation=False, home = home
 )
 
 controller.run_experiments(10)
