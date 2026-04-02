@@ -3,7 +3,7 @@ import json
 import os
 from dataclasses import dataclass
 import spatialmath as sm
-from typing import Optional
+from typing import Optional, Sequence
 import pinocchio as pin
 
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize, ChannelPublisher
@@ -44,9 +44,36 @@ class RobotState:
     right_hand_state: np.ndarray
     "State of the right hand 6 dof"
 
-    def build_low_level_state(self) -> np.ndarray:
+    def get_low_level_parts(self) -> dict[str, np.ndarray]:
+        """Expose named low-dimensional observation parts used by training configs."""
+        return {
+            "left_robot_pos": self.left_arm_state[:3],
+            "left_robot_orien": self.left_arm_state[3:],
+            "right_robot_pos": self.right_arm_state[:3],
+            "right_robot_orien": self.right_arm_state[3:],
+            "left_hand_state": self.left_hand_state,
+            "right_hand_state": self.right_hand_state,
+        }
+
+    def build_low_level_state(self, lowdim_obs_keys: Optional[Sequence[str]] = None) -> np.ndarray:
         """Build a low-dimensional state representation for policy input."""
-        return np.concatenate([self.left_arm_state, self.right_arm_state, self.left_hand_state, self.right_hand_state])
+        parts = self.get_low_level_parts()
+        if lowdim_obs_keys is None:
+            lowdim_obs_keys = (
+                "left_robot_pos",
+                "left_robot_orien",
+                "right_robot_pos",
+                "right_robot_orien",
+                "left_hand_state",
+                "right_hand_state",
+            )
+
+        missing_keys = [key for key in lowdim_obs_keys if key not in parts]
+        if missing_keys:
+            supported_keys = ", ".join(sorted(parts))
+            raise KeyError(f"Unsupported lowdim_obs_keys {missing_keys}. Supported keys: {supported_keys}")
+
+        return np.concatenate([parts[key] for key in lowdim_obs_keys])
 
 
 class G1RobotInterface(BaseRobot):
