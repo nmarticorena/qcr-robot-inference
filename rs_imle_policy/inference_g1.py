@@ -26,6 +26,7 @@ import rs_imle_policy.utils.transforms as transforms_utils
 from rs_imle_policy.policy import Policy
 from rs_imle_policy.datasets.base_dataset import normalize_data, unnormalize_data
 from rs_imle_policy.robots.g1 import G1RobotInterface
+from rs_imle_policy.utils import viz as viz_utils
 
 # Constants
 DEFAULT_SEED = 42
@@ -115,7 +116,7 @@ class G1ArmsInferenceController:
         self.all_frames = defaultdict(list)
 
         self.perception_system = PerceptionSystem(os.environ["G1_IP"], 60000)  # TODO: Need to get this from config
-        self.robot = G1RobotInterface(simulation, home = home)
+        self.robot = G1RobotInterface(simulation, home=home)
         self.setup_diffusion_policy()
 
     def run_experiments(self, episodes: int):
@@ -209,25 +210,95 @@ class G1ArmsInferenceController:
     def infer_action(self, obs_deque):
         self.infer_idx += 1
         obs_cond = self.process_inference_vision(obs_deque)
-        # TODO: Assuming IMLE
-        noise = torch.randn(
-            (1, self.config.model.pred_horizon, self.config.action_shape),
-            device=self.config.model.device,
-        )
-        # clip noise
-        noise = torch.clamp(noise, -1, 1)
-        naction = self.policy.nets["generator"](noise, global_cond=obs_cond)
-        naction = naction.detach().to("cpu").numpy()[0]
 
-        # unnormalize action
+        if isinstance(self.config.model, Diffusion):
+            naction = self._infer_diffusion(obs_cond)
+        elif isinstance(self.config.model, RSIMLE):
+            naction = self._infer_rsimle(obs_cond)
+        else:
+            raise NotImplementedError(f"Model type {type(self.config.model)} not supported for inference.")
+
+        naction = naction.detach().cpu().numpy()[0]
         action_pos = unnormalize_data(naction, stats=self.policy.stats["action"])
 
-        # only take action_horizon number of actions
         start = self.config.model.obs_horizon - 1
         end = start + self.config.model.action_horizon
-        action = action_pos[start:end]
+        return {"action": action_pos[start:end]}
 
-        return {"action": action}
+    def _infer_rsimle(self, obs_cond):
+        assert isinstance(self.config.model, RSIMLE), "Model must be RSIMLE for this inference method"  # type narrowing
+        if self.config.model.traj_consistency:
+            return self._infer_rsimle_with_consistency(obs_cond)
+
+        noise = torch.clamp(
+            torch.randn((1, self.config.model.pred_horizon, self.config.action_shape), device=self.policy.device),
+            -1,
+            1,
+        )
+        return self.policy.nets["generator"](noise, global_cond=obs_cond)
+
+    def _infer_rsimle_with_consistency(self, obs_cond):
+        assert isinstance(self.config.model, RSIMLE), "Model must be RSIMLE for this inference method"  # type narrowing
+        noise = torch.randn(
+            (32, self.config.model.pred_horizon, self.config.action_shape),
+            device=self.policy.device,
+        )
+        batched_naction = self.policy.nets["generator"](noise, global_cond=obs_cond)
+
+        prev_traj_end = self.prev_traj[:, 8:].reshape(1, -1)
+        gen_traj_start = batched_naction[:, :8, :].reshape(32, -1)
+        distances = torch.cdist(gen_traj_start, prev_traj_end)
+        min_idx = distances.argmin(dim=0)
+
+        self._debug_log_sampled_trajectories(batched_naction, distances)
+
+        if self.infer_idx % self.config.model.periodic_length == 0:
+            index = np.random.randint(0, 32)
+            self.prev_traj = batched_naction[index].unsqueeze(0)
+        else:
+            self.prev_traj = batched_naction[min_idx]
+
+        return batched_naction[min_idx]
+
+    def _debug_log_sampled_trajectories(self, batched_naction, distances):
+        action_debug = unnormalize_data(batched_naction.cpu().numpy(), stats=self.policy.stats["action"])
+        positions = action_debug[:, :, :3].reshape(-1, 3)
+        colors = distances.repeat_interleave(self.config.model.pred_horizon, 0)
+        self.rec.log(
+            "/debug/sampled_trajectories",
+            rr.Points3D(
+                positions=positions,
+                colors=viz_utils.colormap(colors.cpu().numpy(), colors.min().item(), colors.max().item()),
+                radii=0.005,
+            ),
+        )
+
+    def _infer_diffusion(self, obs_cond):
+        naction = torch.randn(
+            (1, self.config.model.pred_horizon, self.config.action_shape),
+            device=self.policy.device,
+            dtype=self.policy.precision,
+        )
+
+        assert self.policy.noise_scheduler is not None
+        assert isinstance(self.config.model, Diffusion), (
+            "Model must be Diffusion for this inference method"
+        )  # type narrowing
+        self.policy.noise_scheduler.set_timesteps(self.config.model.num_diffusion_iters)
+
+        for k in self.policy.noise_scheduler.timesteps:
+            noise_pred = self.policy.ema_nets["noise_pred_net"](sample=naction, timestep=k, global_cond=obs_cond)
+            naction = self.policy.noise_scheduler.step(
+                model_output=noise_pred, timestep=int(k), sample=naction
+            ).prev_sample
+
+            self._debug_log_denoising(naction)
+
+        return naction
+
+    def _debug_log_denoising(self, naction):
+        # TODO: Need to check how to implement for both or only one arm
+        return
 
     def _split_action_parts(self, action: np.ndarray) -> dict[str, np.ndarray]:
         parts = {}
@@ -250,7 +321,9 @@ class G1ArmsInferenceController:
     def _repeat_pose(self, pose_matrix: np.ndarray, n_actions: int) -> list[sm.SE3]:
         return [sm.SE3(pose_matrix.copy()) for _ in range(n_actions)]
 
-    def _resolve_arm_poses(self, parts: dict[str, np.ndarray], side: str, current_pose: np.ndarray, n_actions: int) -> list[sm.SE3]:
+    def _resolve_arm_poses(
+        self, parts: dict[str, np.ndarray], side: str, current_pose: np.ndarray, n_actions: int
+    ) -> list[sm.SE3]:
         abs_pos_key = f"{side}_action_pos"
         abs_orien_key = f"{side}_action_orien"
         rel_pos_key = f"{side}_relative_pos"
@@ -315,7 +388,6 @@ class G1ArmsInferenceController:
             .subscribe(lambda x: self.obs_deque.append(x))
         )
         start_time = time.time()
-
 
         while not self.done:
             while len(self.obs_deque) < self.obs_horizon:
