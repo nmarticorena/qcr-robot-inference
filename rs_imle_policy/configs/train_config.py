@@ -264,6 +264,7 @@ class LoaderConfig:
     episodes: int = 10  # total number of episodes to run
     exp_name: Optional[str] = None
     dry_run: bool = False
+    traj_consistency: bool = False # Only valid for RS-IMLE
 
 
 if __name__ == "__main__":

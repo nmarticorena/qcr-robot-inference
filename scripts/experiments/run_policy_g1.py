@@ -25,7 +25,7 @@ else:
 config = tyro.extras.from_yaml(ExperimentConfig, open(args.path / "config.yaml"))
 config.epoch = args.epoch
 if isinstance(config.model, RSIMLE):
-    config.model.traj_consistency = True
+    config.model.traj_consistency = args.traj_consistency
 
 # rr.init("Robot Inference ", recording_id=exp_name)
 rec = rr.RecordingStream("Robot Inference", recording_id = exp_name)
