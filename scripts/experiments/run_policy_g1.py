@@ -31,7 +31,6 @@ if isinstance(config.model, RSIMLE):
 rec = rr.RecordingStream("Robot Inference", recording_id = exp_name)
 os.makedirs(f"saved_evaluation_media/{exp_name}", exist_ok=True)
 rec.save(f"saved_evaluation_media/{exp_name}/rerun_recording.rrd")
-rec.spawn()
 subprocess.Popen(
     ["rerun", f"saved_evaluation_media/{exp_name}/rerun_recording.rrd"],
     shell=False,
@@ -41,6 +40,7 @@ subprocess.Popen(
 
 with open("home.json", "r") as f:
     home = np.array(json.load(f)["home"])
+
 controller = G1ArmsInferenceController(
     config, rec, eval_name=exp_name, timeout=args.timeout, dry_run=args.dry_run, simulation=False, home = home
 )
