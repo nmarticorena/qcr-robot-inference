@@ -28,7 +28,7 @@ rsync -avz  \
 """
 
 [tasks.list_experiments]
-cmd = "ls -d saved_weights/*/ | xargs -I{} basename {}"
+cmd = "bash -c 'find saved_weights/ -mindepth 1 -maxdepth 2 -type d'"
 
 [tasks.copy_unitree]
 args = [
@@ -132,6 +132,7 @@ nanobind = ">=2.12.0,<3"
 unitree_sdk2py = { version = ">=1.0.1,<2", channel = "nmarticorena" }
 rich = ">=14.3.3,<15"
 inspire_hand_sdk = ">=1.0.0,<2"
+rsync = ">=3.4.1,<4"
 
 [pypi-options]
 no-build-isolation = true
