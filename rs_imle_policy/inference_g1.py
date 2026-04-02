@@ -23,6 +23,14 @@ from rs_imle_policy.configs.train_config import (
     RSIMLE,
 )
 
+# TODO: Need to combine to make it less nasty
+from rs_imle_policy.inspire import (
+    INSPIRE_FTP_LEFT_JOINT_MAP,
+    INSPIRE_FTP_RIGHT_JOINT_MAP,
+    hand_state_to_urdf_map,
+    unnormalize_inspire_angles,
+)
+
 import rs_imle_policy.utils.transforms as transforms_utils
 from rs_imle_policy.policy import Policy
 from rs_imle_policy.datasets.base_dataset import normalize_data, unnormalize_data
@@ -151,6 +159,19 @@ class G1ArmsInferenceController:
             self.rerun_gui.rec.log("cameras/{}".format(cam_name), rr.Image(images[ix]["rgb"]).compress(80))
 
         self.rerun_gui.log(state.q)
+
+        # TODO: Clean this mess
+        left_hand_state, right_hand_state = state.left_hand_state, state.right_hand_state
+        left_hand_state = unnormalize_inspire_angles(left_hand_state)
+        right_hand_state = unnormalize_inspire_angles(right_hand_state)
+
+        left_hand_state = hand_state_to_urdf_map(left_hand_state, INSPIRE_FTP_LEFT_JOINT_MAP)
+        right_hand_state = hand_state_to_urdf_map(right_hand_state, INSPIRE_FTP_RIGHT_JOINT_MAP)
+
+        self.rerun_left_hand.log_from_dict(left_hand_state)
+        self.rerun_right_hand.log_from_dict(right_hand_state)
+
+
         low_level_state = state.build_low_level_state(self.config.data.lowdim_obs_keys)
 
         return {"state": low_level_state, **frames}
@@ -229,6 +250,7 @@ class G1ArmsInferenceController:
     def _infer_rsimle(self, obs_cond):
         assert isinstance(self.config.model, RSIMLE), "Model must be RSIMLE for this inference method"  # type narrowing
         if self.config.model.traj_consistency:
+            print("using traj consistency")
             return self._infer_rsimle_with_consistency(obs_cond)
 
         noise = torch.clamp(
@@ -252,8 +274,10 @@ class G1ArmsInferenceController:
         min_idx = distances.argmin(dim=0)
 
         self._debug_log_sampled_trajectories(batched_naction, distances)
+        print("sampling_ id ", self.infer_idx)
 
         if self.infer_idx % self.config.model.periodic_length == 0:
+            print("resampling")
             index = np.random.randint(0, 32)
             self.prev_traj = batched_naction[index].unsqueeze(0)
         else:
@@ -270,6 +294,7 @@ class G1ArmsInferenceController:
         colors = colors.repeat_interleave(positions.shape[0] // colors.shape[0], 0)
         self.rec.log(
             "/debug/sampled_trajectories",
+            rr.Transform3D(parent_frame="pelvis"),
             rr.Points3D(
                 positions=positions,
                 colors=viz_utils.colormap(colors.cpu().numpy(), colors.min().item(), colors.max().item()),
@@ -309,6 +334,7 @@ class G1ArmsInferenceController:
         colors = np.tile(np.array([[0, 0.6, 1.0, 0.8]]), (positions.shape[0], 1))
         self.rec.log(
             "/debug/denoising_positions",
+            rr.Transform3D(parent_frame="pelvis"),
             rr.Points3D(
                 positions=positions,
                 colors=colors,
@@ -422,14 +448,12 @@ class G1ArmsInferenceController:
         while not self.done:
             while len(self.obs_deque) < self.obs_horizon:
                 time.sleep(OBSERVATION_WAIT_TIME_MS / 1000.0)
-                print("Waiting for observation")
 
             infer_start_time = time.perf_counter()
             obs = self.obs_deque.copy()
             out = self.infer_action(obs)
             action = out["action"]
 
-            print("elapsed time: ", time.time() - start_time)
 
             X_WL, X_WR, left_hand, right_hand, progress = self.convert_actions(action)
 
@@ -441,6 +465,8 @@ class G1ArmsInferenceController:
             right_hand_actions = right_hand[:n_actions]
 
             self.rerun_gui.rec.log("/state/progress", rr.Scalars(progress[-1]))
+            self.rerun_gui.rec.log("/state/elapsed_time", rr.Scalars((time.time()-start_time)/self.timeout))
+            self.rerun_gui.rec.log("/state/max_time", rr.Scalars(1))
 
             for pose_index, (x_wl, x_wr) in enumerate(zip(X_WL, X_WR)):
                 self.rerun_gui.log_se3_transform(f"left_ee/{pose_index}", x_wl)
@@ -463,7 +489,7 @@ class G1ArmsInferenceController:
                 right_hand = right_hand_actions[actions_index]  # [0,1] normalized
                 self.robot.hand_controller.policy_to_hand_command(left_hand, right_hand)
                 self.rerun_gui.rec.log("state/left_hand_action", rr.Scalars(left_hand))
-                time.sleep(0.1)
+                time.sleep(0.05)
                 # self.rerun_gui.rec.log("state/rigth_hand_action", rr.Scalars(right_hand))
                 # time.sleep(INFERENCE_TARGET_DT_MULTIPLIER * 0.05)
 
