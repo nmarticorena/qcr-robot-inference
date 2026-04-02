@@ -1,6 +1,7 @@
 import collections
 import os
 from collections import defaultdict
+
 import time
 from typing import Tuple, Optional
 
@@ -262,8 +263,11 @@ class G1ArmsInferenceController:
 
     def _debug_log_sampled_trajectories(self, batched_naction, distances):
         action_debug = unnormalize_data(batched_naction.cpu().numpy(), stats=self.policy.stats["action"])
-        positions = action_debug[:, :, :3].reshape(-1, 3)
+        positions = self._extract_debug_positions(action_debug)
+        if positions.size == 0:
+            return
         colors = distances.repeat_interleave(self.config.model.pred_horizon, 0)
+        colors = colors.repeat_interleave(positions.shape[0] // colors.shape[0], 0)
         self.rec.log(
             "/debug/sampled_trajectories",
             rr.Points3D(
@@ -297,8 +301,20 @@ class G1ArmsInferenceController:
         return naction
 
     def _debug_log_denoising(self, naction):
-        # TODO: Need to check how to implement for both or only one arm
-        return
+        action_debug = unnormalize_data(naction[0].detach().cpu().numpy(), stats=self.policy.stats["action"])
+        positions = self._extract_debug_positions(action_debug[None, ...])
+        if positions.size == 0:
+            return
+
+        colors = np.tile(np.array([[0, 0.6, 1.0, 0.8]]), (positions.shape[0], 1))
+        self.rec.log(
+            "/debug/denoising_positions",
+            rr.Points3D(
+                positions=positions,
+                colors=colors,
+                radii=0.004,
+            ),
+        )
 
     def _split_action_parts(self, action: np.ndarray) -> dict[str, np.ndarray]:
         parts = {}
@@ -317,6 +333,20 @@ class G1ArmsInferenceController:
                 f"but model output has {action.shape[1]} dimensions."
             )
         return parts
+
+    def _extract_debug_positions(self, action: np.ndarray) -> np.ndarray:
+        if action.ndim != 3:
+            raise ValueError(f"Expected action tensor with shape (batch, horizon, dim), got {action.shape}.")
+
+        action_parts = self._split_action_parts(action.reshape(-1, action.shape[-1]))
+        position_keys = [
+            key for key in self.config.data.action_keys if key.endswith("_action_pos") or key.endswith("_relative_pos")
+        ]
+        if not position_keys:
+            return np.empty((0, 3), dtype=action.dtype)
+
+        positions = [action_parts[key] for key in position_keys]
+        return np.concatenate(positions, axis=0)
 
     def _repeat_pose(self, pose_matrix: np.ndarray, n_actions: int) -> list[sm.SE3]:
         return [sm.SE3(pose_matrix.copy()) for _ in range(n_actions)]
@@ -440,7 +470,7 @@ class G1ArmsInferenceController:
             if progress[0] >= PROGRESS_COMPLETE_THRESHOLD:
                 self.done = True
             elapsed_time = time.perf_counter() - infer_start_time
-            rr.log("/debug/inference_time", rr.Scalars(elapsed_time))
+            self.rec.log("/debug/inference_time", rr.Scalars(elapsed_time))
             # remaining_time = target_dt - elapsed_time
             # if remaining_time > 0:
             #     time.sleep(remaining_time)
