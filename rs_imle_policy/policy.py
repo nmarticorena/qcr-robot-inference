@@ -8,6 +8,7 @@ import copy
 import os
 
 import numpy as np
+import pickle
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
@@ -45,7 +46,6 @@ class Policy:
     def __init__(
         self,
         config: ExperimentConfig,
-        training: bool = True,
         dataset: BaseDataset | None = None,
     ):
         """Initialize the policy.
@@ -54,6 +54,7 @@ class Policy:
             config: Experiment configuration object
         """
         self.config = config
+        training = self.config.training
 
         if isinstance(self.config.model, Diffusion):
             self.noise_scheduler = DDPMScheduler(
@@ -103,7 +104,7 @@ class Policy:
                 self.config.model.name + "_" + self.config.exp_name,
             )
             stats_path = os.path.join(self.folder, "stats.pkl")
-            self.stats = np.load(stats_path, allow_pickle=True)
+            self.stats = pickle.load(stats_path)
 
             self.nets = self.create_networks()
             self.ema = EMAModel(parameters=self.nets.parameters(), power=0.75)

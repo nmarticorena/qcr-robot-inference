@@ -140,6 +140,7 @@ class RobotInferenceController:
     def setup_diffusion_policy(self):
         """Initialize the policy model and observation buffer."""
         torch.cuda.empty_cache()
+        self.config.training = False
         self.policy = Policy(self.config)
 
         self.obs_horizon = self.config.model.obs_horizon
