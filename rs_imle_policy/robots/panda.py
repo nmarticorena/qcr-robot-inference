@@ -75,7 +75,7 @@ class FrankxRobot(BaseRobot):
         self.pos = self.X_BE[:3, 3]
         self.rot = self.X_BE[:3, :3]
 
-    def get_gripper_width(self) -> float:
+    def get_gripper_state(self) -> float:
         """Get current gripper width.
 
         Returns:
@@ -143,7 +143,7 @@ class FrankxRobot(BaseRobot):
 
         rot = transforms.matrix_to_rotation_6d(X_BE[:3, :3])
         pos = X_BE[:3, 3]
-        width = self.get_gripper_width()
+        width = self.get_gripper_state()
 
         # Store values for further use
         self.X_BE = X_BE
@@ -239,7 +239,7 @@ class PandaPyRobot:
         self.pos = self.X_BE[:3, 3]
         self.rot = self.X_BE[:3, :3]
 
-    def get_gripper_width(self) -> float:
+    def get_gripper_state(self) -> float:
         """Get current gripper width.
 
         Returns:
@@ -285,7 +285,7 @@ class PandaPyRobot:
 
         rot = transforms.matrix_to_rotation_6d(X_BE[:3, :3])
         pos = X_BE[:3, 3]
-        width = self.get_gripper_width()
+        width = self.get_gripper_state()
 
         # Store values for further use
         self.X_BE = X_BE
