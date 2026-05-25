@@ -100,9 +100,7 @@ def matrix_to_quaternion(matrix: torch.Tensor) -> torch.Tensor:
         raise ValueError(f"Invalid rotation matrix shape {matrix.shape}.")
 
     batch_dim = matrix.shape[:-2]
-    m00, m01, m02, m10, m11, m12, m20, m21, m22 = torch.unbind(
-        matrix.reshape(batch_dim + (9,)), dim=-1
-    )
+    m00, m01, m02, m10, m11, m12, m20, m21, m22 = torch.unbind(matrix.reshape(batch_dim + (9,)), dim=-1)
 
     q_abs = _sqrt_positive_part(
         torch.stack(
@@ -154,9 +152,7 @@ def rotation_6d_to_quat(rot: torch.Tensor) -> torch.Tensor:
     return matrix_to_quaternion(mat)
 
 
-def pos_rot_to_se3(
-    pos: Union[torch.Tensor, NDArray], rot: Union[torch.Tensor, NDArray]
-) -> List[sm.SE3]:
+def pos_rot_to_se3(pos: Union[torch.Tensor, NDArray], rot: Union[torch.Tensor, NDArray]) -> List[sm.SE3]:
     """Convert position and 6D rotation to SE3 object.
 
     Args:

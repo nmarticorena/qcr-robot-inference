@@ -67,9 +67,17 @@ class VisionConfig:
     img_shape: tuple[int, int] = (240, 320)
 
     def __post_init__(self):
-        self.cameras_params: list[CameraConfig] = [
-            default_cameras[cam] for cam in self.cameras
-        ]
+        self.cameras_params: list[CameraConfig] = [default_cameras[cam] for cam in self.cameras]
+
+
+@dataclass
+class G1VisionConfig(VisionConfig):
+    """Vision configuration for G1 dataset"""
+
+    cameras: tuple[str, ...] = ("color_0",)
+
+    def __post_init__(self):
+        return
 
 
 @dataclass
@@ -109,6 +117,72 @@ class DataConfig:
 
     # Vision configuration
     vision: VisionConfig = field(default_factory=VisionConfig)
+
+
+@dataclass
+class G1ArmsDataConfig(DataConfig):
+    """Data configuration for G1 arms dataset"""
+
+    lowdim_obs_keys: tuple[str, ...] = (
+        "left_robot_pos",
+        "left_robot_orien",
+        "right_robot_pos",
+        "right_robot_orien",
+        "left_hand_state",
+        "right_hand_state",
+    )
+
+    action_keys: tuple[str, ...] = (
+        "left_action_pos",
+        "left_action_orien",
+        "right_action_pos",
+        "right_action_orien",
+        "left_hand_action",
+        "right_hand_action",
+        "progress",
+    )
+
+    vision: VisionConfig = field(default_factory=G1VisionConfig)
+
+
+@dataclass
+class G1LeftArmDataConfig(DataConfig):
+    """Data configuration for G1 left arm dataset"""
+
+    lowdim_obs_keys: tuple[str, ...] = (
+        "left_robot_pos",
+        "left_robot_orien",
+        "left_hand_state",
+    )
+
+    action_keys: tuple[str, ...] = (
+        "left_action_pos",
+        "left_action_orien",
+        "left_hand_action",
+        "progress",
+    )
+
+    vision: VisionConfig = field(default_factory=G1VisionConfig)
+
+
+@dataclass
+class G1RightArmDataConfig(DataConfig):
+    """Data configuration for G1 right arm dataset"""
+
+    lowdim_obs_keys: tuple[str, ...] = (
+        "right_robot_pos",
+        "right_robot_orien",
+        "right_hand_state",
+    )
+
+    action_keys: tuple[str, ...] = (
+        "right_action_pos",
+        "right_action_orien",
+        "right_hand_action",
+        "progress",
+    )
+
+    vision: VisionConfig = field(default_factory=G1VisionConfig)
 
 
 @dataclass
@@ -169,7 +243,6 @@ class ExperimentConfig:
     model: Diffusion | RSIMLE
     task_name: str = "default"
     debug: bool = False
-    training: bool = True
 
     # Sub-configurations
     training_params: OptimConfig = field(default_factory=OptimConfig)
@@ -190,6 +263,7 @@ class LoaderConfig:
     episodes: int = 10  # total number of episodes to run
     exp_name: Optional[str] = None
     dry_run: bool = False
+    traj_consistency: bool = False # Only valid for RS-IMLE
 
 
 if __name__ == "__main__":

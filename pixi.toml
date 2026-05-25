@@ -1,6 +1,6 @@
 [workspace]
 authors = [""]
-channels = ["conda-forge"]
+channels = ["conda-forge", "nmarticorena"]
 name = "real-robot-inference"
 platforms = ["linux-64"]
 version = "1.0.0"
@@ -8,6 +8,9 @@ version = "1.0.0"
 
 [tasks.gripper_home]
 cmd = "python3 scripts/robot/home_gripper.py"
+
+[tasks.format_urdf]
+cmd = "bash format_urdf.sh"
 
 [tasks.copy_all]
 args = [
@@ -24,11 +27,33 @@ rsync -avz  \
     nmarticorena@rllab.qut.edu.au:/home/nmarticorena/real-robot-inference/{{ exp_name }}/
 """
 
+[tasks.list_experiments]
+cmd = "bash -c 'find saved_weights/ -mindepth 1 -maxdepth 2 -type d'"
+
+[tasks.copy_unitree]
+args = [
+    { arg = "exp_name" },
+]
+cmd = """
+rsync -avz  \
+    --rsync-path='/home/vlu/.pixi/bin/rsync' \
+    --mkpath \
+    --include='*.yaml' \
+    --include='*last*' \
+    --include='*.pkl' \
+    --exclude='*' \
+    {{ exp_name }}/ \
+    vlu@vlu-isaacsim.qut.edu.au:/home/vlu/qcr-robot-inference/{{ exp_name }}/
+"""
+
 [tasks.sync_datasets]
 cmd = "rsync -avz --ignore-existing nmarticorena@rllab.qut.edu.au:/home/nmarticorena/panda_dc/data/ data/"
 
+[tasks.reset_g1]
+cmd = "python3 scripts/reset_g1.py"
+
 [system-requirements]
-cuda = "12.8"
+cuda = "12.4"
 
 [dependencies]
 python = "==3.11"
@@ -66,7 +91,6 @@ pytorch-gpu = ">=2.7.1,<3" # https://github.com/conda-forge/torchvision-feedstoc
 cuda-version = "12.9.*"
 torchvision = ">=0.24.0,<0.25"
 pims = ">=0.7,<0.8"
-tyro = ">=0.9.35,<0.10"
 hatchling = ">=1.27.0,<2"
 pdbpp = ">=0.11.7,<0.12"
 reactivex = ">=4.0.4,<5"
@@ -84,16 +108,42 @@ jupyter = ">=1.1.1,<2"
 nbstripout = ">=0.8.1,<0.9"
 inquirerpy = ">=0.3.4,<0.4"
 pybind11 = ">=3.0.1,<4"
-rerun-sdk = ">=0.27.2,<0.28"
+rerun-sdk = ">=0.29.2,<0.30"
 yourdfpy = ">=0.0.57,<0.0.58"
 trimesh = ">=4.10.0,<5"
-pycollada = ">=0.9.2,<0.10"
 grad-cam = ">=1.5.5,<2"
+robot_descriptions = ">=1.22.0,<2"
+# motion_tools = ">=0.1.17,<0.2"
+cyclonedds = {channel = "nmarticorena", version = ">=0.10.2,<0.11"}
+cyclonedds-py = ">=0.10.2,<0.11"
+compilers = ">=1.3.0,<2"
+pinocchio = ">=3.9.0,<4"
+# pink = ">=4"
+flit-core = ">=3.12.0,<4"
+qpsolvers = ">=4.8.2,<5"
+daqp = ">=0.7.1,<0.8"
+libxml2 = ">=2.15.2,<3"
+urdfpy = ">=0.0.22,<0.0.23"
+pycollada = ">=0.9.3,<0.10"
+tyro = ">1"
+# viser = ">=1.0.24,<2"
+hatch-vcs = ">=0.5.0,<0.6"
+nodeenv = ">=1.10.0,<2"
+pink = ">=4.1.0"
+viser = ">=1.0.24,<2"
+nanobind = ">=2.12.0,<3"
+unitree_sdk2py = { version = ">=1.0.1,<2", channel = "nmarticorena" }
+rich = ">=14.3.3,<15"
+inspire_hand_sdk = ">=1.0.0,<2"
+rsync = ">=3.4.1,<4"
 
 [pypi-options]
 no-build-isolation = true
 
 [pypi-dependencies]
+motion_tools= {path = "../motion_tools/" , editable = true}
+# pin-pink = {git = "https://github.com/stephane-caron/pink.git", rev = "main"}
+#pin-pink = {path = "../../tutorials/pink"}
 huggingface-hub = {extras = ["hf-transfer", "cli"]}
 rs_imle_policy = {path = ".", editable = true}
 roboticstoolbox-python = {git = "https://github.com/nmarticorena/robotics-toolbox-python.git"}
@@ -101,8 +151,18 @@ swift-sim = {git = "https://github.com/nmarticorena/swift.git"}
 spatialgeometry = {git = "https://github.com/nmarticorena/spatialgeometry.git"}
 spatialmath-python = {git = "https://github.com/nmarticorena/spatialmath-python.git"}
 frankx = {git = "https://github.com/nmarticorena/frankx.git", rev = "legacy_version"}
+teleimager = {git = "https://github.com/nmarticorena/teleimager.git" , rev = "ed0c8d3"}
+# unitree_sdk2py = {path = "../robot_forks/unitree_sdk2_python/", editable = false}
+ruckig = {version = "==0.15.3"}
+
+
 atomics = ">=1.0.3, <2"
 panda-python = ">=0.8.1, <0.9"
+rich-click = ">=1.9.7, <2"
 
 [activation.env]
 PANDA_IP = "172.16.0.2"
+G1_IP = "192.168.123.164"
+G1_NETWORK_INTERFACE = "enp0s31f6"
+UNITREE_HOST_IP = "192.168.123.123" # Ip of local host computer for the connecting to the G1
+CYCLONEDDS_URI="<CycloneDDS><Domain><General><Interfaces><NetworkInterface address='192.168.123.123'/></Interfaces></General></Domain></CycloneDDS>"

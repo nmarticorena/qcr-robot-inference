@@ -23,10 +23,10 @@ from rs_imle_policy.configs.train_config import (
     RSIMLE,
     VisionConfig,
 )
-from rs_imle_policy.dataset import normalize_data, unnormalize_data
+from rs_imle_policy.datasets.base_dataset import normalize_data, unnormalize_data
 from rs_imle_policy.policy import Policy
 from rs_imle_policy.realsense.multi_realsense import MultiRealsense
-from rs_imle_policy.robot import FrankxRobot, PandaPyRobot
+from rs_imle_policy.robots import FrankxRobot, PandaPyRobot
 from rs_imle_policy.visualizer.rerun_tools import ReRunRobot
 
 # Constants
@@ -66,9 +66,7 @@ class PerceptionSystem:
     def start(self):
         """Start the camera system and configure camera settings."""
         for cam_params in self.cams_config.cameras_params:
-            self.cams.cameras[cam_params.serial_number].set_exposure(
-                exposure=cam_params.exposure, gain=cam_params.gain
-            )
+            self.cams.cameras[cam_params.serial_number].set_exposure(exposure=cam_params.exposure, gain=cam_params.gain)
         self.cams.start()
 
     def stop(self):
@@ -105,7 +103,6 @@ class RobotInferenceController:
         self.last_called_obs = time.time()
         self.seed(DEFAULT_SEED)
         self.config = config
-        self.config.training = False
         if dry_run:
             self.robot = PandaPyRobot(dry_run=dry_run)
         else:
@@ -142,7 +139,7 @@ class RobotInferenceController:
     def setup_diffusion_policy(self):
         """Initialize the policy model and observation buffer."""
         torch.cuda.empty_cache()
-        self.policy = Policy(self.config)
+        self.policy = Policy(self.config, training = False)
 
         self.obs_horizon = self.config.model.obs_horizon
         self.obs_deque = collections.deque(maxlen=self.config.model.obs_horizon)
@@ -182,9 +179,7 @@ class RobotInferenceController:
             for cam_name in cams:
                 image = np.stack([x[cam_name] for x in obs_deque])
                 input_image = torch.stack([self.policy.transform(img) for img in image])
-                feat = encoders[f"vision_encoder_{cam_name}"](
-                    input_image.to(device, dtype)
-                )
+                feat = encoders[f"vision_encoder_{cam_name}"](input_image.to(device, dtype))
                 image_features.append(feat)
 
         obs_features = torch.cat(image_features + [nagent_pos], dim=-1)
@@ -219,9 +214,7 @@ class RobotInferenceController:
     def record_videos(self):
         """Save recorded camera frames as video files."""
         for cam_name in self.config.data.vision.cameras:
-            save_path = (
-                f"saved_evaluation_media/{self.eval_name}/{self.idx}_{cam_name}.mp4"
-            )
+            save_path = f"saved_evaluation_media/{self.eval_name}/{self.idx}_{cam_name}.mp4"
             out = cv2.VideoWriter(
                 save_path,
                 cv2.VideoWriter_fourcc(*"mp4v"),  # type: ignore[attr-defined]
@@ -257,9 +250,7 @@ class RobotInferenceController:
                 naction = noisy_action
                 # Initialize scheduler
                 assert self.policy.noise_scheduler is not None
-                self.policy.noise_scheduler.set_timesteps(
-                    self.config.model.num_diffusion_iters
-                )
+                self.policy.noise_scheduler.set_timesteps(self.config.model.num_diffusion_iters)
 
                 for k in self.policy.noise_scheduler.timesteps:
                     # Predict noise
@@ -272,22 +263,18 @@ class RobotInferenceController:
                         model_output=noise_pred, timestep=int(k), sample=naction
                     ).prev_sample
 
-                    debug_denoising = unnormalize_data(
-                        naction[0].cpu().numpy(), stats=self.policy.stats["action"]
-                    )
+                    debug_denoising = unnormalize_data(naction[0].cpu().numpy(), stats=self.policy.stats["action"])
                     trans = debug_denoising[:, :3]
                     rot_6d = debug_denoising[:, 3:9]
-                    rot_mat3x3 = transform_utils.rotation_6d_to_matrix(
-                        torch.from_numpy(rot_6d)
-                    ).numpy()
+                    rot_mat3x3 = transform_utils.rotation_6d_to_matrix(torch.from_numpy(rot_6d)).numpy()
                     for i in range(trans.shape[0]):
                         rr.log(
                             f"/debug/denoising_step/poses_{i}",
                             rr.Transform3D(
                                 translation=trans[i],
                                 mat3x3=rot_mat3x3[i],
-                                axis_length=0.1,
                             ),
+                            rr.TransformAxes3D(axis_length=0.1),
                         )
 
             elif isinstance(self.config.model, RSIMLE):
@@ -296,9 +283,7 @@ class RobotInferenceController:
                         (32, self.config.model.pred_horizon, self.config.action_shape),
                         device=self.policy.device,
                     )
-                    batched_naction = self.policy.nets["generator"](
-                        noise, global_cond=obs_cond
-                    )
+                    batched_naction = self.policy.nets["generator"](noise, global_cond=obs_cond)
                     prev_traj_end = self.prev_traj[:, 8:].reshape(1, -1)
                     gen_traj_start = batched_naction[:, :8, :].reshape(32, -1)
 
@@ -312,9 +297,7 @@ class RobotInferenceController:
                     naction = batched_naction[min_idx]
 
                     action_debug_pos = action_debug[:, :, :3].reshape(-1, 3)
-                    colors = distances.repeat_interleave(
-                        self.config.model.pred_horizon, 0
-                    )
+                    colors = distances.repeat_interleave(self.config.model.pred_horizon, 0)
                     rr.log(
                         "/debug/sampled_trajectories",
                         rr.Points3D(
@@ -373,7 +356,8 @@ class RobotInferenceController:
         for i in range(n_actions):
             rr.log(
                 f"/action/pose_{i}/transform",
-                rr.Transform3D(translation=trans[i], mat3x3=rots[i], axis_length=0.1),
+                rr.Transform3D(translation=trans[i], mat3x3=rots[i]),
+                rr.TransformAxes3D(axis_length=0.1),
             )
 
     @staticmethod
@@ -459,9 +443,7 @@ class RobotInferenceController:
 
             r = transform_utils.rotation_6d_to_matrix(action[:, 3:9])
 
-            self.log_poses(
-                n_trans, r.numpy(), relative=self.config.data.action_relative
-            )
+            self.log_poses(n_trans, r.numpy(), relative=self.config.data.action_relative)
             progress = action[:, -1:]
             rr.log("/action/gripper", rr.Scalars(action[0, -2].tolist()))
             rr.log("/action/progress", rr.Scalars(action[0, -1].tolist()))
@@ -502,9 +484,7 @@ class RobotInferenceController:
         assert self.robot.move_async is not None
         self.robot.move_async.join()
 
-    def convert_actions(
-        self, action: np.ndarray
-    ) -> tuple[list[np.ndarray], np.ndarray, list[sm.SE3]]:
+    def convert_actions(self, action: np.ndarray) -> tuple[list[np.ndarray], np.ndarray, list[sm.SE3]]:
         """Convert action array to different pose representations.
 
         Args:

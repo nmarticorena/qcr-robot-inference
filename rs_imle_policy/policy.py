@@ -8,6 +8,7 @@ import copy
 import os
 
 import numpy as np
+import pickle
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
@@ -16,7 +17,7 @@ from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from diffusers.training_utils import EMAModel
 
 from rs_imle_policy.configs.train_config import Diffusion, ExperimentConfig, RSIMLE
-from rs_imle_policy.dataset import PolicyDataset
+from rs_imle_policy.datasets import BaseDataset
 from rs_imle_policy.network import (
     DiffusionConditionalUnet1D,
     GeneratorConditionalUnet1D,
@@ -27,10 +28,10 @@ from rs_imle_policy.network import (
 
 class Policy:
     """Manages policy model initialization, training, and inference.
-    
+
     Supports both diffusion-based policies and RS-IMLE generative policies
     for robot manipulation tasks.
-    
+
     Attributes:
         config: Experiment configuration
         device: Compute device (CPU or CUDA)
@@ -41,10 +42,15 @@ class Policy:
         stats: Data normalization statistics
         transform: Image preprocessing transforms
     """
-    
-    def __init__(self, config: ExperimentConfig):
+
+    def __init__(
+        self,
+        config: ExperimentConfig,
+        training: bool,
+        dataset: BaseDataset | None = None,
+    ):
         """Initialize the policy.
-        
+
         Args:
             config: Experiment configuration object
         """
@@ -62,17 +68,9 @@ class Policy:
 
         self.precision = torch.float32
         self.device = self.config.model.device
-        if self.config.training:
-            self.dataset = PolicyDataset(
-                self.config.dataset_path,
-                self.config.model.pred_horizon,
-                self.config.model.obs_horizon,
-                self.config.model.action_horizon,
-                low_dim_obs_keys=self.config.data.lowdim_obs_keys,
-                action_keys=self.config.data.action_keys,
-                vision_config=self.config.data.vision,
-                use_next_state=self.config.data.use_next_state,
-            )
+        if training:
+            assert dataset is not None, "Dataset must be provided for training mode"
+            self.dataset = dataset
             self.dataloader = torch.utils.data.DataLoader(
                 self.dataset,
                 batch_size=self.config.training_params.batch_size,
@@ -95,8 +93,7 @@ class Policy:
                 name=self.config.training_params.lr_scheduler_profile,
                 optimizer=self.optimizer,
                 num_warmup_steps=self.config.training_params.num_warmup_steps,
-                num_training_steps=len(self.dataloader)
-                * self.config.training_params.num_epochs,
+                num_training_steps=len(self.dataloader) * self.config.training_params.num_epochs,
             )
 
             print("Training Mode.")
@@ -107,7 +104,7 @@ class Policy:
                 self.config.model.name + "_" + self.config.exp_name,
             )
             stats_path = os.path.join(self.folder, "stats.pkl")
-            self.stats = np.load(stats_path, allow_pickle=True)
+            self.stats = pickle.load(stats_path)
 
             self.nets = self.create_networks()
             self.ema = EMAModel(parameters=self.nets.parameters(), power=0.75)
@@ -154,15 +151,12 @@ class Policy:
 
     def create_networks(self) -> nn.ModuleDict:
         """Create and initialize neural networks for the policy.
-        
+
         Returns:
             ModuleDict containing vision encoders and policy network
         """
         cameras = self.config.data.vision.cameras
-        vision_encoders = {
-            f"vision_encoder_{camera}": replace_bn_with_gn(get_resnet("resnet18"))
-            for camera in cameras
-        }
+        vision_encoders = {f"vision_encoder_{camera}": replace_bn_with_gn(get_resnet("resnet18")) for camera in cameras}
 
         if isinstance(self.config.model, Diffusion):
             noise_pred_net = DiffusionConditionalUnet1D(

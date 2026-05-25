@@ -86,9 +86,7 @@ class SingleRealsense(mp.Process):
 
         vis_ring_buffer = SharedMemoryRingBuffer.create_from_examples(
             shm_manager=shm_manager,
-            examples=examples
-            if vis_transform is None
-            else vis_transform(dict(examples)),
+            examples=examples if vis_transform is None else vis_transform(dict(examples)),
             get_max_k=1,
             get_time_budget=0.2,
             put_desired_frequency=expedcted_capture_fps,
@@ -117,29 +115,19 @@ class SingleRealsense(mp.Process):
         )
 
         # create shared array for intrinsics
-        intrinsics_array = SharedNDArray.create_from_shape(
-            mem_mgr=shm_manager, shape=(7,), dtype=np.float64
-        )
+        intrinsics_array = SharedNDArray.create_from_shape(mem_mgr=shm_manager, shape=(7,), dtype=np.float64)
         intrinsics_array.get()[:] = 0
 
-        depth_intrinsics_array = SharedNDArray.create_from_shape(
-            mem_mgr=shm_manager, shape=(7,), dtype=np.float64
-        )
+        depth_intrinsics_array = SharedNDArray.create_from_shape(mem_mgr=shm_manager, shape=(7,), dtype=np.float64)
         depth_intrinsics_array.get()[:] = 0
 
-        distortion_array = SharedNDArray.create_from_shape(
-            mem_mgr=shm_manager, shape=(5,), dtype=np.float64
-        )
+        distortion_array = SharedNDArray.create_from_shape(mem_mgr=shm_manager, shape=(5,), dtype=np.float64)
         distortion_array.get()[:] = 0
 
-        depth_distortion_array = SharedNDArray.create_from_shape(
-            mem_mgr=shm_manager, shape=(5,), dtype=np.float64
-        )
+        depth_distortion_array = SharedNDArray.create_from_shape(mem_mgr=shm_manager, shape=(5,), dtype=np.float64)
         depth_distortion_array.get()[:] = 0
 
-        extrinsincs_array = SharedNDArray.create_from_shape(
-            mem_mgr=shm_manager, shape=(16,), dtype=np.float64
-        )
+        extrinsincs_array = SharedNDArray.create_from_shape(mem_mgr=shm_manager, shape=(16,), dtype=np.float64)
         extrinsincs_array.get()[:] = 0
 
         # create video recorder
@@ -351,9 +339,7 @@ class SingleRealsense(mp.Process):
         if self.depth_video_recorder:
             # add _depth to path
             video_path = Path(video_path)
-            video_path = video_path.parent.joinpath(
-                video_path.stem + "_depth" + video_path.suffix
-            )
+            video_path = video_path.parent.joinpath(video_path.stem + "_depth" + video_path.suffix)
             self.depth_video_recorder.start(video_path)
         # self.command_queue.put({
         #     'cmd': Command.START_RECORDING.value,
@@ -382,9 +368,7 @@ class SingleRealsense(mp.Process):
         # })
 
     def restart_put(self, start_time):
-        self.command_queue.put(
-            {"cmd": Command.RESTART_PUT.value, "put_start_time": start_time}
-        )
+        self.command_queue.put({"cmd": Command.RESTART_PUT.value, "put_start_time": start_time})
 
     def project(self, X):
         if X.shape[0] == 3:
@@ -431,9 +415,7 @@ class SingleRealsense(mp.Process):
 
             # report global time
             # https://github.com/IntelRealSense/librealsense/pull/3909
-            self.product_id = pipeline_profile.get_device().get_info(
-                rs.camera_info.product_id
-            )
+            self.product_id = pipeline_profile.get_device().get_info(rs.camera_info.product_id)
             if self.product_id == "0B5B":  # D405
                 d = pipeline_profile.get_device().first_depth_sensor()
             else:
@@ -461,13 +443,9 @@ class SingleRealsense(mp.Process):
             if self.enable_depth:
                 depth_sensor = pipeline_profile.get_device().first_depth_sensor()
                 if self.serial_number.startswith("f"):
-                    depth_sensor.set_option(
-                        rs.option.visual_preset, int(rs.l500_visual_preset.short_range)
-                    )
+                    depth_sensor.set_option(rs.option.visual_preset, int(rs.l500_visual_preset.short_range))
                     confidence_threshold = 1.0
-                    depth_sensor.set_option(
-                        rs.option.confidence_threshold, confidence_threshold
-                    )
+                    depth_sensor.set_option(rs.option.confidence_threshold, confidence_threshold)
                     # Custom settings
                     noise_filtering = 6.0
                     depth_sensor.set_option(rs.option.noise_filtering, noise_filtering)
@@ -477,13 +455,9 @@ class SingleRealsense(mp.Process):
                     depth_sensor.set_option(rs.option.receiver_gain, receiver_gain)
                     # post process sharpening
                     post_sharpening = 1.0
-                    depth_sensor.set_option(
-                        rs.option.post_processing_sharpening, post_sharpening
-                    )
+                    depth_sensor.set_option(rs.option.post_processing_sharpening, post_sharpening)
                     pre_sharpening = 2.0
-                    depth_sensor.set_option(
-                        rs.option.pre_processing_sharpening, pre_sharpening
-                    )
+                    depth_sensor.set_option(rs.option.pre_processing_sharpening, pre_sharpening)
 
                 depth_scale = depth_sensor.get_depth_scale()
                 self.intrinsics_array.get()[-1] = depth_scale
@@ -539,9 +513,7 @@ class SingleRealsense(mp.Process):
                 if self.enable_depth:
                     data["depth"] = np.asarray(frameset.get_depth_frame().get_data())
                 if self.enable_infrared:
-                    data["infrared"] = np.asarray(
-                        frameset.get_infrared_frame().get_data()
-                    )
+                    data["infrared"] = np.asarray(frameset.get_infrared_frame().get_data())
 
                 # apply transform
                 put_data = data
@@ -570,9 +542,7 @@ class SingleRealsense(mp.Process):
                         try:
                             self.ring_buffer.put(put_data, wait=False)
                         except TimeoutError as e:
-                            print(
-                                f"[SingleRealsense {self.serial_number}] dumping data. - {e}"
-                            )
+                            print(f"[SingleRealsense {self.serial_number}] dumping data. - {e}")
                 else:
                     step_idx = int((receive_time - put_start_time) * self.put_fps)
                     put_data["step_idx"] = step_idx
@@ -580,9 +550,7 @@ class SingleRealsense(mp.Process):
                     try:
                         self.ring_buffer.put(put_data, wait=False)
                     except TimeoutError as e:
-                        print(
-                            f"[SingleRealsense {self.serial_number}] dumping data. - {e}"
-                        )
+                        print(f"[SingleRealsense {self.serial_number}] dumping data. - {e}")
 
                 # signal ready
                 if iter_idx == 0:
@@ -666,9 +634,7 @@ class SingleRealsense(mp.Process):
                         if self.depth_video_recorder:
                             # add _depth to path
                             video_path = Path(video_path)
-                            video_path = video_path.parent.joinpath(
-                                video_path.stem + "_depth" + video_path.suffix
-                            )
+                            video_path = video_path.parent.joinpath(video_path.stem + "_depth" + video_path.suffix)
                             self.depth_video_recorder.start(video_path)
                     elif cmd == Command.STOP_RECORDING.value:
                         if self.color_video_recorder:

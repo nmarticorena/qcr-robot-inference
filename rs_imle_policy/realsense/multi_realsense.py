@@ -31,9 +31,7 @@ class MultiRealsense:
         advanced_mode_config: Optional[Union[dict, List[dict]]] = None,
         transform: Optional[Union[Callable[[Dict], Dict], List[Callable]]] = None,
         vis_transform: Optional[Union[Callable[[Dict], Dict], List[Callable]]] = None,
-        recording_transform: Optional[
-            Union[Callable[[Dict], Dict], List[Callable]]
-        ] = None,
+        recording_transform: Optional[Union[Callable[[Dict], Dict], List[Callable]]] = None,
         # video_recorder: Optional[Union[VideoRecorder, List[VideoRecorder]]]=None,
         verbose=False,
     ):
