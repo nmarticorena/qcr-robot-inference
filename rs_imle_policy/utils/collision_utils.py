@@ -4,13 +4,11 @@ import pinocchio as pin
 def force_convex_collision_geometry(robot: pin.RobotWrapper, inflation: float = 0.0) -> int:
     """
     Force convex collision geometry for the robot.
-    This method loads the collision geometries and convertst them
+    This method loads the collision geometries and convert them
     to convex hulls, which can be used for collision checking and distance
 
-    Important this operation is in place
-
     Args:
-        robot:pin.RobotWrapper: Pinnochio robot wrapper, which contains the collision model to be converted.
+        robot:pin.RobotWrapper: pinocchio robot wrapper, which contains the collision model to be converted.
     Returns:
         converted: int
             The number of geometries that are converted to convex hulls.
