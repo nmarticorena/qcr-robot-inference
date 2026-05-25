@@ -46,6 +46,7 @@ class Policy:
     def __init__(
         self,
         config: ExperimentConfig,
+        training: bool,
         dataset: BaseDataset | None = None,
     ):
         """Initialize the policy.
@@ -54,7 +55,6 @@ class Policy:
             config: Experiment configuration object
         """
         self.config = config
-        training = self.config.training
 
         if isinstance(self.config.model, Diffusion):
             self.noise_scheduler = DDPMScheduler(

@@ -202,7 +202,7 @@ def main():
         )
         print("no debug")
 
-    policy = Policy(config=args)
+    policy = Policy(config=args, training = True, dataset = dataset)
     nets = policy.nets
 
     train(

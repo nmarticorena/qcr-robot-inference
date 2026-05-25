@@ -243,7 +243,6 @@ class ExperimentConfig:
     model: Diffusion | RSIMLE
     task_name: str = "default"
     debug: bool = False
-    training: bool = True
 
     # Sub-configurations
     training_params: OptimConfig = field(default_factory=OptimConfig)

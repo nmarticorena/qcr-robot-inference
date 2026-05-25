@@ -103,7 +103,6 @@ class RobotInferenceController:
         self.last_called_obs = time.time()
         self.seed(DEFAULT_SEED)
         self.config = config
-        self.config.training = False
         if dry_run:
             self.robot = PandaPyRobot(dry_run=dry_run)
         else:
@@ -140,8 +139,7 @@ class RobotInferenceController:
     def setup_diffusion_policy(self):
         """Initialize the policy model and observation buffer."""
         torch.cuda.empty_cache()
-        self.config.training = False
-        self.policy = Policy(self.config)
+        self.policy = Policy(self.config, training = False)
 
         self.obs_horizon = self.config.model.obs_horizon
         self.obs_deque = collections.deque(maxlen=self.config.model.obs_horizon)

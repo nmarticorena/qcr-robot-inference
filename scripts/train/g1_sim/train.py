@@ -63,7 +63,7 @@ def main(config: G1ExperimentConfigChoice) -> None:
     dataset = build_dataset(config)
     dataloader = build_dataloader(config, dataset)
 
-    policy = Policy(config=config, dataset=dataset)
+    policy = Policy(config=config, training = True, dataset=dataset)
     train(
         config,
         policy.nets,
