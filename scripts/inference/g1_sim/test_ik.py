@@ -67,7 +67,6 @@ while True:
     q_arm = controller.get_current_dual_arm_q()
     q_left_arm = q_arm[:7]
     q_right_arm = q_arm[7:14]
-    breakpoint()
 
     dq_arm = controller.get_current_dual_arm_dq()
     ik.configuration.update(q_arm.copy())
