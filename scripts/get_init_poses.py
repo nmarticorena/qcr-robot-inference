@@ -36,11 +36,11 @@ def get_home(dataset_path: str, /):
 
     avg_home = np.mean(homes, axis=0)
 
-    home = {"home": avg_home.tolist()}
+    home = {"home": homes[0].tolist()}
 
     with open("home.json", "w") as f:
         json.dump(home, f, indent=2)
-        
+
 
     print(avg_home)
 
