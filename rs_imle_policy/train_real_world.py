@@ -160,16 +160,14 @@ def train(
 
 
 def main():
-    from rs_imle_policy.configs.default_configs import (
-        PickPlaceRSMLERelativeConfig as Config,
-    )
+    from dataclasses import asdict
+    from rs_imle_policy.configs.default_configs import FrankaExperimentConfigChoice
+    
     from rs_imle_policy.datasets.single_franka import PandaPolicyDataset
 
-    args = tyro.cli(Config)
-    wandb.init(project=args.task_name, config=args)
-
-    # change wandb name
-    wandb.run.name = f"{args.exp_name}_{args.model.name}"
+    args = tyro.cli(FrankaExperimentConfigChoice)
+    exp_name = args.process_name()
+    wandb.init(project=args.task_name, config=asdict(args), name = exp_name)
 
     dataset = PandaPolicyDataset(
         args.dataset_path,
