@@ -118,6 +118,13 @@ class DataConfig:
     # Vision configuration
     vision: VisionConfig = field(default_factory=VisionConfig)
 
+    def get_name(self) -> str:
+        string = ""
+        string += "ra" if self.action_relative else "aa"
+        string += "_next" if self.use_next_state else "_leader"
+        string += "_" + "_".join(self.vision.cameras) 
+        return string
+
 
 @dataclass
 class G1ArmsDataConfig(DataConfig):
@@ -251,6 +258,14 @@ class ExperimentConfig:
     epoch: Optional[int] = None  # For loading checkpoints
     action_shape: int = 0  # Solved during training
     obs_shape: int = 0  # Solved during training
+
+    def process_name(self) -> str:
+        name = ""
+        name += self.model.name + "_"
+        name += self.data.get_name() + "_"
+        name += self.task_name + "_"
+        name += self.exp_name
+        return name
 
 
 @dataclass
