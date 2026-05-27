@@ -62,6 +62,8 @@ class PerceptionSystem:
             enable_depth=vision_config.cameras_params[0].depth_enabled,
         )
         self.cams_config = vision_config
+        self.serial_numbers = serial_numbers
+        self.serial_to_name_map = {cam.serial_number: cam.name for cam in vision_config.cameras_params}
 
     def start(self):
         """Start the camera system and configure camera settings."""
@@ -72,6 +74,19 @@ class PerceptionSystem:
     def stop(self):
         """Stop the camera system."""
         self.cams.stop()
+
+    def serial_to_name(self, serial: str):
+        """Convert camera serial number to camera name.
+
+        Args:
+            serial: Serial number of the camera
+
+        Returns:
+            str: Name of the camera
+        """
+        return self.serial_to_name_map.get(serial, serial)
+        
+
 
 
 class RobotInferenceController:

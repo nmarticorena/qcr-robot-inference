@@ -1,4 +1,6 @@
 import json
+import pims
+import os
 import time
 from contextlib import suppress
 from pathlib import Path
@@ -13,7 +15,7 @@ from rs_imle_policy.robots.panda import FrankxRobot
 from rs_imle_policy.visualizer.eval_utils import mean_image
 
 
-FRANKA_HOME = np.deg2rad([-90.0, 0.0, 0.0, -90.0, 0.0, 90.0, 45.0])
+FRANKA_HOME = np.deg2rad([0.0, 0.0, 0.0, -90.0, 0.0, 90.0, 45.0])
 WINDOW_NAME = "Franka evaluation experiments"
 DISPLAY_SIZE = (320, 240)
 
@@ -139,6 +141,51 @@ def _write_manifest(
     with (output_dir / "experiments.json").open("w") as f:
         json.dump(payload, f, indent=2)
 
+def overlay(
+    perception: PerceptionSystem,
+    dataset_path: Path
+):
+    def load_cameras(dataset_path) -> dict[str,np.ndarray]:
+        experiment = os.listdir(dataset_path / "episodes")[0]
+        video_folder = dataset_path/ "episodes" /experiment / "video"
+        frames: dict[str, np.ndarray] = {}
+
+        for video_name in sorted(os.listdir(video_folder)):
+            if not video_name.endswith(".mp4"):
+                continue
+
+            video_id = Path(video_name).stem
+            video_path = video_folder / video_name
+
+            pims_video = pims.PyAVReaderIndexed(str(video_path))
+
+            if len(pims_video) == 0:
+                raise ValueError(f"Video has no frames: {video_path}")
+
+            frame = np.asarray(pims_video[0])
+
+            # pims usually returns RGB, OpenCV expects BGR
+            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+            frames[perception.serial_to_name(video_id)] = frame_bgr
+        return frames
+
+    camera_frames = load_cameras(dataset_path)
+    print(camera_frames)
+    print(perception.cams_config.cameras)
+
+    while True:
+        images = perception.cams.get() 
+        for ix, cam_name in enumerate(perception.cams_config.cameras):
+            if cam_name in camera_frames:
+                img = cv2.addWeighted(images[ix]["color"], 0.5, camera_frames[cam_name], 0.5, 0, images[ix]["color"])
+            else:
+                img = images[ix]["color"]
+            cv2.imshow(cam_name, img)
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
+    cv2.destroyAllWindows() 
+
 
 def main(args: EvaluationConfig) -> None:
     output_dir = args.output_dir / args.task_name
@@ -148,14 +195,18 @@ def main(args: EvaluationConfig) -> None:
     snapshot_frames = {camera_name: [] for camera_name in args.vision.cameras}
     perception_started = False
 
-    try:
-        robot.move_to_start(FRANKA_HOME)
-        perception.start()
-        perception_started = True
-        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+    robot.move_to_start(FRANKA_HOME)
+    perception.start()
+    perception_started = True
 
-        print("Robot is at the fixed Franka home position.")
-        print("Press space or s to add an experiment; q or esc exits.")
+    print("Robot is at the fixed Franka home position.")
+    print("Press space or s to add an experiment; q or esc exits.")
+
+    if args.dataset_path:
+        overlay(perception, args.dataset_path)
+            
+    try:
+        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
 
         while len(experiments) < args.n_experiments:
             frames = perception.cams.get()
