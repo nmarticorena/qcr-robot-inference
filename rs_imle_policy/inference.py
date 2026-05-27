@@ -2,6 +2,7 @@ import collections
 import os
 import time
 from collections import defaultdict
+from pathlib import Path
 from typing import Optional
 
 import cv2
@@ -39,6 +40,9 @@ GRIPPER_CLOSE_THRESHOLD = 0.5
 PROGRESS_COMPLETE_THRESHOLD = 0.95
 OBSERVATION_WAIT_TIME_MS = 1
 INFERENCE_TARGET_DT_MULTIPLIER = 4
+REFERENCE_DISPLAY_SIZE = (320, 240)
+EVALUATION_WINDOW_NAME = "Evaluation setup"
+DEFAULT_HOME_Q = np.deg2rad([-90, 0, 0, -90, 0, 90, 45])
 
 
 class PerceptionSystem:
@@ -113,6 +117,7 @@ class RobotInferenceController:
         eval_name: str,
         timeout: int,
         dry_run: bool = False,
+        home_q: Optional[NDArray] = None,
     ):
         self.infer_idx = 0
         self.last_called_obs = time.time()
@@ -122,7 +127,8 @@ class RobotInferenceController:
             self.robot = PandaPyRobot(dry_run=dry_run)
         else:
             self.robot = FrankxRobot(dry_run=dry_run)
-        self.robot.move_to_start(np.deg2rad([-90, 0, 0, -90, 0, 90, 45]))
+        self.home_q = DEFAULT_HOME_Q if home_q is None else np.asarray(home_q, dtype=float)
+        self.robot.move_to_start(self.home_q)
         self.timeout = timeout
 
         rtb_panda = rtb.models.Panda()
@@ -415,9 +421,147 @@ class RobotInferenceController:
             print(f"Starting episode {i + 1}/{episodes}")
             self.done = False
             time.sleep(0.1)
-            self.robot.move_to_start(np.deg2rad([-90, 0, 0, -90, 0, 90, 45]))
+            self.robot.move_to_start(self.home_q)
 
             input("Press Enter to start the next episode...")
+            self.obs_deque.clear()
+            self.inference_loop()
+            self.all_frames = defaultdict(list)
+            print(f"Finished episode {i + 1}/{episodes}")
+
+    @staticmethod
+    def _resize_reference_frame(frame: np.ndarray) -> np.ndarray:
+        return cv2.resize(frame, REFERENCE_DISPLAY_SIZE)
+
+    @staticmethod
+    def _label_reference_frame(frame: np.ndarray, text: str) -> np.ndarray:
+        out = frame.copy()
+        cv2.rectangle(out, (0, 0), (out.shape[1], 28), (0, 0, 0), -1)
+        cv2.putText(
+            out,
+            text,
+            (8, 19),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (255, 255, 255),
+            1,
+            cv2.LINE_AA,
+        )
+        return out
+
+    @staticmethod
+    def _blank_reference_frame(text: str) -> np.ndarray:
+        frame = np.zeros((*REFERENCE_DISPLAY_SIZE[::-1], 3), dtype=np.uint8)
+        return RobotInferenceController._label_reference_frame(frame, text)
+
+    @staticmethod
+    def _pad_reference_width(frame: np.ndarray, width: int) -> np.ndarray:
+        if frame.shape[1] == width:
+            return frame
+        pad = np.zeros((frame.shape[0], width - frame.shape[1], 3), dtype=np.uint8)
+        return np.hstack([frame, pad])
+
+    def _load_reference_frames(self, experiment: dict) -> dict[str, np.ndarray]:
+        frames: dict[str, np.ndarray] = {}
+        for camera_name, image_path in experiment.get("images", {}).items():
+            frame = cv2.imread(str(Path(image_path)))
+            if frame is None:
+                raise FileNotFoundError(f"Could not read evaluation image: {image_path}")
+            frames[camera_name] = frame
+        return frames
+
+    def _make_reference_display(
+        self,
+        live_frames: dict[str, np.ndarray],
+        reference_frames: dict[str, np.ndarray],
+        episode_idx: int,
+        episodes: int,
+    ) -> np.ndarray:
+        live_tiles = []
+        reference_tiles = []
+        for camera_name in self.config.data.vision.cameras:
+            live_frame = live_frames.get(camera_name)
+            ref_frame = reference_frames.get(camera_name)
+            live_tiles.append(
+                self._label_reference_frame(
+                    self._resize_reference_frame(live_frame)
+                    if live_frame is not None
+                    else self._blank_reference_frame(f"{camera_name}: live"),
+                    f"{camera_name}: live",
+                )
+            )
+            reference_tiles.append(
+                self._label_reference_frame(
+                    self._resize_reference_frame(ref_frame)
+                    if ref_frame is not None
+                    else self._blank_reference_frame(f"{camera_name}: target"),
+                    f"{camera_name}: target",
+                )
+            )
+
+        live_row = np.hstack(live_tiles)
+        reference_row = np.hstack(reference_tiles)
+
+        footer = np.zeros((44, live_row.shape[1], 3), dtype=np.uint8)
+        text = (
+            f"Align scene to target. enter/space: start  q/esc: abort  "
+            f"episode {episode_idx + 1}/{episodes}"
+        )
+        cv2.putText(
+            footer,
+            text,
+            (8, 28),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (255, 255, 255),
+            1,
+            cv2.LINE_AA,
+        )
+
+        width = max(live_row.shape[1], reference_row.shape[1], footer.shape[1])
+        return np.vstack(
+            [
+                self._pad_reference_width(live_row, width),
+                self._pad_reference_width(reference_row, width),
+                self._pad_reference_width(footer, width),
+            ]
+        )
+
+    def wait_for_experiment_setup(self, experiment: dict, episode_idx: int, episodes: int) -> None:
+        reference_frames = self._load_reference_frames(experiment)
+        cv2.namedWindow(EVALUATION_WINDOW_NAME, cv2.WINDOW_NORMAL)
+        while True:
+            images = self.perception_system.cams.get()
+            live_frames = {
+                camera_name: images[ix]["color"]
+                for ix, camera_name in enumerate(self.config.data.vision.cameras)
+            }
+            cv2.imshow(
+                EVALUATION_WINDOW_NAME,
+                self._make_reference_display(
+                    live_frames,
+                    reference_frames,
+                    episode_idx,
+                    episodes,
+                ),
+            )
+            key = cv2.waitKey(1) & 0xFF
+            if key in (13, ord(" "), ord("s")):
+                break
+            if key in (ord("q"), 27):
+                raise KeyboardInterrupt("Evaluation aborted by user.")
+        cv2.destroyWindow(EVALUATION_WINDOW_NAME)
+
+    def run_evaluation_experiments(self, experiments: list[dict]):
+        """Run evaluation episodes guided by a saved experiment manifest."""
+        episodes = len(experiments)
+        for i, experiment in enumerate(experiments):
+            self.idx = int(experiment.get("index", i))
+            print(f"Starting episode {i + 1}/{episodes}")
+            self.done = False
+            time.sleep(0.1)
+            self.robot.move_to_start(self.home_q)
+            self.wait_for_experiment_setup(experiment, i, episodes)
             self.obs_deque.clear()
             self.inference_loop()
             self.all_frames = defaultdict(list)
