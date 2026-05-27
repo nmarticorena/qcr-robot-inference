@@ -104,7 +104,7 @@ class Policy:
                 self.config.model.name + "_" + self.config.exp_name,
             )
             stats_path = os.path.join(self.folder, "stats.pkl")
-            self.stats = pickle.load(stats_path)
+            self.stats = pickle.load(open(stats_path,"rb"))
 
             self.nets = self.create_networks()
             self.ema = EMAModel(parameters=self.nets.parameters(), power=0.75)
