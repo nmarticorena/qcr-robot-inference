@@ -161,7 +161,7 @@ def train(
 
 def main():
     from dataclasses import asdict
-    from rs_imle_policy.configs.default_configs import FrankaExperimentConfigChoice
+    from rs_imle_policy.configs.experiment_configs import FrankaExperimentConfigChoice
     
     from rs_imle_policy.datasets.single_franka import PandaPolicyDataset
 
