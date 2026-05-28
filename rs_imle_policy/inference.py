@@ -42,7 +42,8 @@ OBSERVATION_WAIT_TIME_MS = 1
 INFERENCE_TARGET_DT_MULTIPLIER = 4
 REFERENCE_DISPLAY_SIZE = (320, 240)
 EVALUATION_WINDOW_NAME = "Evaluation setup"
-DEFAULT_HOME_Q = np.deg2rad([-90, 0, 0, -90, 0, 90, 45])
+# DEFAULT_HOME_Q = np.deg2rad([-90, 0, 0, -90, 0, 90, 45])
+DEFAULT_HOME_Q = [0.0, -np.pi / 4, 0.0, -3 * np.pi / 4, 0.0, np.pi / 2, np.pi / 4]
 
 
 class PerceptionSystem:
