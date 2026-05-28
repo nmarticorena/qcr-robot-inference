@@ -30,6 +30,9 @@ rsync -avz  \
 [tasks.list_experiments]
 cmd = "bash -c 'find saved_weights/ -mindepth 1 -maxdepth 2 -type d'"
 
+[tasks.copy_weights]
+cmd = "python3 scripts/hpc/transfer_weights.py"
+
 [tasks.copy_unitree]
 args = [
     { arg = "exp_name" },

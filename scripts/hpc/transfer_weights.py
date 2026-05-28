@@ -6,12 +6,16 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+import tyro
 from InquirerPy import inquirer
 
 
-REMOTE = "hpc"
-REMOTE_ROOT = "repos/qcr-robot-inference/saved_weights"
-LOCAL_ROOT = Path("saved_weights")
+@dataclass
+class Config:
+    remote: str = "hpc"
+    remote_root: str = "repos/qcr-robot-inference/saved_weights"
+    local_root: Path = Path("saved_weights")
+
 
 @dataclass(frozen=True)
 class RemoteExperiment:
@@ -19,16 +23,14 @@ class RemoteExperiment:
     name: str
 
     @property
-    def remote_path(self) -> str:
-        return f"{REMOTE_ROOT}/{self.group}/{self.name}"
-
-    @property
-    def local_path(self) -> Path:
-        return LOCAL_ROOT / self.group / self.name
-
-    @property
     def label(self) -> str:
         return f"{self.group}/{self.name}"
+
+    def remote_path(self, config: Config) -> str:
+        return f"{config.remote_root}/{self.group}/{self.name}"
+
+    def local_path(self, config: Config) -> Path:
+        return config.local_root / self.group / self.name
 
 
 def run(cmd: list[str], *, capture: bool = False) -> str:
@@ -42,12 +44,12 @@ def run(cmd: list[str], *, capture: bool = False) -> str:
     return result.stdout if capture else ""
 
 
-def list_remote_experiments() -> list[RemoteExperiment]:
+def list_remote_experiments(config: Config) -> list[RemoteExperiment]:
     cmd = [
         "ssh",
-        REMOTE,
+        config.remote,
         (
-            f"cd {REMOTE_ROOT} || exit 1; "
+            f"cd {config.remote_root} || exit 1; "
             "find . -mindepth 2 -maxdepth 2 -type d | sort"
         ),
     ]
@@ -73,8 +75,9 @@ def list_remote_experiments() -> list[RemoteExperiment]:
     return experiments
 
 
-def transfer_experiment(exp: RemoteExperiment) -> None:
-    exp.local_path.mkdir(parents=True, exist_ok=True)
+def transfer_experiment(exp: RemoteExperiment, config: Config) -> None:
+    local_path = exp.local_path(config)
+    local_path.mkdir(parents=True, exist_ok=True)
 
     cmd = [
         "rsync",
@@ -86,8 +89,8 @@ def transfer_experiment(exp: RemoteExperiment) -> None:
         "--include=*.yml",
         "--include=*.pkl",
         "--exclude=*",
-        f"{REMOTE}:{exp.remote_path}/",
-        f"{exp.local_path}/",
+        f"{config.remote}:{exp.remote_path(config)}/",
+        f"{local_path}/",
     ]
 
     print()
@@ -98,11 +101,11 @@ def transfer_experiment(exp: RemoteExperiment) -> None:
     run(cmd)
 
 
-def main() -> None:
-    experiments = list_remote_experiments()
+def main(config: Config) -> None:
+    experiments = list_remote_experiments(config)
 
     if not experiments:
-        raise RuntimeError(f"No experiments found under {REMOTE}:{REMOTE_ROOT}")
+        raise RuntimeError(f"No experiments found under {config.remote}:{config.remote_root}")
 
     choices = [
         {
@@ -121,13 +124,13 @@ def main() -> None:
     ).execute()
 
     for exp in selected:
-        transfer_experiment(exp)
+        transfer_experiment(exp, config)
 
     print()
     print("Transferred experiments:")
     for exp in selected:
-        print(f"  - {exp.label} -> {exp.local_path}")
+        print(f"  - {exp.label} -> {exp.local_path(config)}")
 
 
 if __name__ == "__main__":
-    main()
+    main(tyro.cli(Config))
