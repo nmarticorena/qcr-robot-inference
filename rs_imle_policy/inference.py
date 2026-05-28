@@ -583,8 +583,6 @@ class RobotInferenceController:
 
         start_time = time.time()
 
-        time.sleep(0.5)
-
         all_actions = np.zeros((0, self.config.action_shape))
 
         target_dt = 1.0 / DEFAULT_REFRESH_RATE_HZ * INFERENCE_TARGET_DT_MULTIPLIER
