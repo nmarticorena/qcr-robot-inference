@@ -288,6 +288,10 @@ class RobotInferenceController:
                     trans = debug_denoising[:, :3]
                     rot_6d = debug_denoising[:, 3:9]
                     rot_mat3x3 = transform_utils.rotation_6d_to_matrix(torch.from_numpy(rot_6d)).numpy()
+                    if self.config.data.action_relative:
+                        p0, r0 = self.robot.pos, self.robot.rot
+                        trans, rot_mat3x3 = self.transform_action_to_absolute(trans, rot_mat3x3, p0, r0)
+
                     for i in range(trans.shape[0]):
                         rr.log(
                             f"/debug/denoising_step/poses_{i}",
