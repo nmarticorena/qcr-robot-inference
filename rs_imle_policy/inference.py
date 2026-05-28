@@ -167,10 +167,9 @@ class RobotInferenceController:
         self.obs_deque = collections.deque(maxlen=self.config.model.obs_horizon)
 
         if isinstance(self.config.model, RSIMLE):
-            self.prev_traj = torch.randn(
-                (1, self.config.model.pred_horizon, self.config.action_shape),
-                device=self.policy.device,
-            )
+            self.prev_traj: Optional[torch.Tensor] = None
+            self.prev_traj_pos: Optional[NDArray] = None
+            self.prev_traj_rot: Optional[NDArray] = None
 
     def process_inference_vision(self, obs_deque):
         """Process visual observations through encoders.
