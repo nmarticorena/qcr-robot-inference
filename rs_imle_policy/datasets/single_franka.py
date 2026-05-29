@@ -102,8 +102,7 @@ class PandaPolicyDataset(BaseDataset):
                 X_BE_next = X_BE_current[1:]
                 X_BE_next.append(X_BE_current[-1])
             else:
-                X_BE_next = [(self.robot.fkine(np.array(q))).A for q in df["gello_q"]][1:]
-                X_BE_next.append(X_BE_next[-1])
+                X_BE_next = [(self.robot.fkine(np.array(q))).A for q in df["gello_q"]]
 
             relative_transform = self.get_relative_transform(X_BE_current, X_BE_next)
 
