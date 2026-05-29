@@ -58,7 +58,7 @@ def train(
 ):
     nets.train()
 
-    folder = os.path.join("saved_weights", args.task_name, args.model.name + "_" + args.exp_name)
+    folder = os.path.join("saved_weights", args.task_name, args.process_name())
     os.makedirs(folder, exist_ok=True)
 
     config = tyro.extras.to_yaml(args)

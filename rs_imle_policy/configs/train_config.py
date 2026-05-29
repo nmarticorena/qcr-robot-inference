@@ -263,7 +263,7 @@ class ExperimentConfig:
         name = ""
         name += self.model.name + "_"
         name += self.data.get_name() + "_"
-        name += self.task_name + "_"
+        # name += self.task_name + "_"
         name += self.exp_name
         return name
 
