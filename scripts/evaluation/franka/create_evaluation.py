@@ -105,6 +105,7 @@ def _save_experiment(
     output_dir: Path,
     index: int,
     camera_frames: dict[str, np.ndarray],
+    home_q: np.ndarray = FRANKA_HOME,
 ) -> dict:
     experiment_dir = _experiment_dir(output_dir, index)
     experiment_dir.mkdir(parents=True, exist_ok=True)
@@ -118,7 +119,7 @@ def _save_experiment(
     return {
         "index": index,
         "timestamp": time.time(),
-        "home_q": FRANKA_HOME.tolist(),
+        "home_q": home_q.tolist(),
         "images": image_paths,
     }
 
@@ -127,11 +128,12 @@ def _write_manifest(
     output_dir: Path,
     args: EvaluationConfig,
     experiments: list[dict],
+    home_q: np.ndarray = FRANKA_HOME,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "task_name": args.task_name,
-        "home_q": FRANKA_HOME.tolist(),
+        "home_q": home_q.tolist(),
         "cameras": list(args.vision.cameras),
         "camera_serials": {
             params.name: params.serial_number for params in args.vision.cameras_params
@@ -186,6 +188,17 @@ def overlay(
             break
     cv2.destroyAllWindows() 
 
+def get_average_home(dataset_path: Path) -> None:
+    experiments = os.listdir(dataset_path / "episodes")
+    home_qs = []
+    for experiment in experiments:
+        with open(dataset_path / "episodes" / experiment / "state.json", "r") as f:
+            data = json.load(f)
+            home_qs.append(data[0]["robot_q"])
+    mean_home_q = np.mean(home_qs, axis=0)
+    print("Average home_q across experiments:", mean_home_q)
+    return mean_home_q
+
 
 def main(args: EvaluationConfig) -> None:
     output_dir = args.output_dir / args.task_name
@@ -194,8 +207,9 @@ def main(args: EvaluationConfig) -> None:
     experiments: list[dict] = []
     snapshot_frames = {camera_name: [] for camera_name in args.vision.cameras}
     perception_started = False
+    home_franka = FRANKA_HOME
 
-    robot.move_to_start(FRANKA_HOME)
+    robot.move_to_start(home_franka)
     perception.start()
     perception_started = True
 
@@ -203,6 +217,8 @@ def main(args: EvaluationConfig) -> None:
     print("Press space or s to add an experiment; q or esc exits.")
 
     if args.dataset_path:
+        home_franka = get_average_home(args.dataset_path)
+        robot.move_to_start(home_franka)
         overlay(perception, args.dataset_path)
             
     try:
@@ -231,13 +247,13 @@ def main(args: EvaluationConfig) -> None:
             if key in (ord("s"), ord(" ")):
                 index = len(experiments)
                 camera_frames = {name: frame.copy() for name, frame in live_frames.items()}
-                experiments.append(_save_experiment(output_dir, index, camera_frames))
+                experiments.append(_save_experiment(output_dir, index, camera_frames, home_franka))
                 for camera_name, frame in camera_frames.items():
                     snapshot_frames[camera_name].append(frame)
-                _write_manifest(output_dir, args, experiments)
+                _write_manifest(output_dir, args, experiments, home_franka)
                 print(f"Added experiment {index}: {output_dir / f'experiment_{index:03d}'}")
 
-        _write_manifest(output_dir, args, experiments)
+        _write_manifest(output_dir, args, experiments, home_franka)
         print(f"Saved {len(experiments)} experiments to {output_dir}")
     finally:
         if perception_started:
