@@ -1,20 +1,20 @@
 import time
 import roboticstoolbox as rtb
-from rs_imle_policy.dataset import PolicyDataset, unnormalize_data
+from rs_imle_policy.datasets import PandaPolicyDataset, unnormalize_data
 from rs_imle_policy.configs.train_config import VisionConfig
-from rs_imle_policy.configs.default_configs import ExperimentConfigChoice
+from rs_imle_policy.configs.experiment_configs import FrankaExperimentConfigChoice
 from rs_imle_policy.visualizer import rerun_tools
 import rs_imle_policy.utils.transforms as transform_utils
 
 import rerun as rr
 import tyro
 
-args = tyro.cli(ExperimentConfigChoice)
+args = tyro.cli(FrankaExperimentConfigChoice)
 
 with open(args.dataset_path / "vision_config.yml", "r") as f:
     vision_config = tyro.extras.from_yaml(VisionConfig, f)
 
-dataset = PolicyDataset(
+dataset = PandaPolicyDataset(
     args.dataset_path,
     vision_config=vision_config,
     low_dim_obs_keys=args.data.lowdim_obs_keys,
@@ -30,7 +30,7 @@ gui_follower = rerun_tools.ReRunRobot(rtb.models.Panda(), "follower")
 
 for episode in rlds:
     ep_data = rlds[episode]
-    ep_data_video = dataset.cached_dataset[str(episode)]
+    ep_data_video = dataset.cached_dataset[str(episode).zfill(4)]
 
     for idx in range(len(ep_data["state"])):
         gello_q = unnormalize_data(ep_data["gello_q"][idx], dataset.stats["gello_q"])
@@ -62,4 +62,4 @@ for episode in rlds:
 
         rr.log("action/progress", rr.Scalars(progress))
 
-        time.sleep(0.1)  # 10 hz is the frequency we loged the data
+        # time.sleep(0.1)  # 10 hz is the frequency we loged the data
