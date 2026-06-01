@@ -21,10 +21,16 @@ class Config:
 class RemoteExperiment:
     group: str
     name: str
+    modified_timestamp: float
+    modified_date: str
 
     @property
     def label(self) -> str:
         return f"{self.group}/{self.name}"
+
+    @property
+    def dated_label(self) -> str:
+        return f"{self.label} ({self.modified_date})"
 
     def remote_path(self, config: Config) -> str:
         return f"{config.remote_root}/{self.group}/{self.name}"
@@ -50,7 +56,8 @@ def list_remote_experiments(config: Config) -> list[RemoteExperiment]:
         config.remote,
         (
             f"cd {config.remote_root} || exit 1; "
-            "find . -mindepth 2 -maxdepth 2 -type d | sort"
+            "find . -mindepth 2 -maxdepth 2 -type d "
+            "-printf '%T@\t%Td-%Tm-%TY\t%p\n'"
         ),
     ]
 
@@ -59,20 +66,33 @@ def list_remote_experiments(config: Config) -> list[RemoteExperiment]:
     experiments: list[RemoteExperiment] = []
 
     for line in output.splitlines():
-        line = line.strip().removeprefix("./")
+        line = line.strip()
 
         if not line:
             continue
 
-        parts = line.split("/")
+        fields = line.split("\t", maxsplit=2)
+
+        if len(fields) != 3:
+            continue
+
+        timestamp, modified_date, path = fields
+        parts = path.removeprefix("./").split("/")
 
         if len(parts) != 2:
             continue
 
         group, name = parts
-        experiments.append(RemoteExperiment(group=group, name=name))
+        experiments.append(
+            RemoteExperiment(
+                group=group,
+                name=name,
+                modified_timestamp=float(timestamp),
+                modified_date=modified_date,
+            )
+        )
 
-    return experiments
+    return sorted(experiments, key=lambda exp: exp.modified_timestamp, reverse=True)
 
 
 def transfer_experiment(exp: RemoteExperiment, config: Config) -> None:
@@ -109,7 +129,7 @@ def main(config: Config) -> None:
 
     choices = [
         {
-            "name": exp.label,
+            "name": f"{exp.dated_label} -> {exp.remote_path(config)}",
             "value": exp,
         }
         for exp in experiments
@@ -129,7 +149,7 @@ def main(config: Config) -> None:
     print()
     print("Transferred experiments:")
     for exp in selected:
-        print(f"  - {exp.label} -> {exp.local_path(config)}")
+        print(f"  - {exp.dated_label}: {exp.remote_path(config)} -> {exp.local_path(config)}")
 
 
 if __name__ == "__main__":
