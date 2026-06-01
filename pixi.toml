@@ -5,55 +5,28 @@ name = "real-robot-inference"
 platforms = ["linux-64"]
 version = "1.0.0"
 
+[tasks]
+list_experiments = {cmd = "bash -c 'find saved_weights/ -mindepth 1 -maxdepth 2 -type d'" }
+copy_weights = {cmd = "python3 scripts/hpc/transfer_weights.py" }
+sync_datasets = {cmd = "python3 scripts/hpc/transfer_datasets.py" }
 
-[tasks.gripper_home]
-cmd = "python3 scripts/robot/home_gripper.py"
+# Franka specific
+experiment = {cmd = "python3 scripts/experiments/run_policy.py" }
+gripper_home = {cmd = "python3 scripts/robot/home_gripper.py" }
 
-[tasks.format_urdf]
-cmd = "bash format_urdf.sh"
+# G1 Specific
+reset_g1 = {cmd = "python3 scripts/reset_g1.py"}
 
-[tasks.copy_all]
-args = [
-    { arg = "exp_name" },
-]
-cmd = """
-rsync -avz  \
-    --rsync-path='/home/nmarticorena/.pixi/bin/rsync' \
-    --include='*.yaml' \
-    --include='*last*' \
-    --include='*.pkl' \
-    --exclude='*' \
-    {{ exp_name }}/ \
-    nmarticorena@rllab.qut.edu.au:/home/nmarticorena/real-robot-inference/{{ exp_name }}/
-"""
+# Linter specific
+format_urdf = {cmd = "bash format_urdf.sh"}
 
-[tasks.list_experiments]
-cmd = "bash -c 'find saved_weights/ -mindepth 1 -maxdepth 2 -type d'"
+[activation.env]
+PANDA_IP = "172.16.0.2"
+G1_IP = "192.168.123.164"
+G1_NETWORK_INTERFACE = "enp0s31f6"
+UNITREE_HOST_IP = "192.168.123.123" # Ip of local host computer for the connecting to the G1
+CYCLONEDDS_URI="<CycloneDDS><Domain><General><Interfaces><NetworkInterface address='192.168.123.123'/></Interfaces></General></Domain></CycloneDDS>"
 
-[tasks.copy_weights]
-cmd = "python3 scripts/hpc/transfer_weights.py"
-
-[tasks.copy_unitree]
-args = [
-    { arg = "exp_name" },
-]
-cmd = """
-rsync -avz  \
-    --rsync-path='/home/vlu/.pixi/bin/rsync' \
-    --mkpath \
-    --include='*.yaml' \
-    --include='*last*' \
-    --include='*.pkl' \
-    --exclude='*' \
-    {{ exp_name }}/ \
-    vlu@vlu-isaacsim.qut.edu.au:/home/vlu/qcr-robot-inference/{{ exp_name }}/
-"""
-
-[tasks.sync_datasets]
-cmd = "rsync -avz --ignore-existing nmarticorena@rllab.qut.edu.au:/home/nmarticorena/panda_dc/data/ data/"
-
-[tasks.reset_g1]
-cmd = "python3 scripts/reset_g1.py"
 
 [system-requirements]
 cuda = "12.4"
@@ -146,8 +119,6 @@ no-build-isolation = true
 
 [pypi-dependencies]
 motion_tools= {path = "../motion_tools/" , editable = true}
-# pin-pink = {git = "https://github.com/stephane-caron/pink.git", rev = "main"}
-#pin-pink = {path = "../../tutorials/pink"}
 huggingface-hub = {extras = ["hf-transfer", "cli"]}
 rs_imle_policy = {path = ".", editable = true}
 roboticstoolbox-python = {git = "https://github.com/nmarticorena/robotics-toolbox-python.git"}
@@ -156,17 +127,24 @@ spatialgeometry = {git = "https://github.com/nmarticorena/spatialgeometry.git"}
 spatialmath-python = {git = "https://github.com/nmarticorena/spatialmath-python.git"}
 frankx = {git = "https://github.com/nmarticorena/frankx.git", rev = "legacy_version"}
 teleimager = {git = "https://github.com/nmarticorena/teleimager.git" , rev = "ed0c8d3"}
-# unitree_sdk2py = {path = "../robot_forks/unitree_sdk2_python/", editable = false}
 ruckig = {version = "==0.15.3"}
-
-
 atomics = ">=1.0.3, <2"
 panda-python = ">=0.8.1, <0.9"
 rich-click = ">=1.9.7, <2"
 
-[activation.env]
-PANDA_IP = "172.16.0.2"
-G1_IP = "192.168.123.164"
-G1_NETWORK_INTERFACE = "enp0s31f6"
-UNITREE_HOST_IP = "192.168.123.123" # Ip of local host computer for the connecting to the G1
-CYCLONEDDS_URI="<CycloneDDS><Domain><General><Interfaces><NetworkInterface address='192.168.123.123'/></Interfaces></General></Domain></CycloneDDS>"
+
+[tasks.copy_unitree]
+args = [
+    { arg = "exp_name" },
+]
+cmd = """
+rsync -avz  \
+    --rsync-path='/home/vlu/.pixi/bin/rsync' \
+    --mkpath \
+    --include='*.yaml' \
+    --include='*last*' \
+    --include='*.pkl' \
+    --exclude='*' \
+    {{ exp_name }}/ \
+    vlu@vlu-isaacsim.qut.edu.au:/home/vlu/qcr-robot-inference/{{ exp_name }}/
+"""
