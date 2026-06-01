@@ -6,8 +6,6 @@ environments:
     - url: https://conda.anaconda.org/nmarticorena/
     indexes:
     - https://pypi.org/simple
-    options:
-      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-7_kmp_llvm.conda
@@ -786,13 +784,14 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/db/3c/33bac158f8ab7f89b2e59426d5fe2e4f63f7ed25df84c036890172b412b5/cfgv-3.5.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e4/33/58702880fe6bb3ed91cb21e1c92b002f9b73e32c0c5e3e9e2c0a94eaac61/colored-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/33/6b/e0547afaf41bf2c42e52430072fa5658766e3d65bd4b03a563d1b6336f57/distlib-0.4.0-py2.py3-none-any.whl
-      - pypi: git+https://github.com/nmarticorena/frankx.git?rev=legacy_version#5aae4d5e549969f4f31e2847fe007833081a172b
+      - pypi: git+https://github.com/nmarticorena/frankx.git?rev=legacy_version#19a14b078d4b3a5c68f02538f5575fa7935f0936
       - pypi: https://files.pythonhosted.org/packages/46/33/92ef41c6fad0233e41d3d84ba8e8ad18d1780f1e5d99b3c683e6d7f98b63/identify-2.6.18-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bf/51/bbafec960b1441ccca954d08653ac955ab55aa1817c2650c80fbc7fa4d21/logging_mp-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e2/7a/cba41bab339a8f9d02767f1ed1493e920d160c938bb09a52f54891c49368/panda_python-0.8.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a1/a4/b7c6b1971bdff95429a52e60ab04c21d9176307d36299a07d0076fa63b1b/pgraph_python-0.6.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/5d/19/fd3ef348460c80af7bb4669ea7926651d1f95c23ff2df18b9d24bab4f3fa/pre_commit-4.5.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/42/59/123aee44a039b212cfb8d90be1adf06496a99b313ee1683aadf90b3d9799/progress-1.6.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/03/43/00e9f7a133ef5fb30dab75e8c39b0fd9640129ed52c8202a86ef7aaf4363/pyribbit-0.1.46-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c2/3c/2005227cb951df502412de2fa781f800663cccbef8d90ec6f1b371ac2c0d/python_discovery-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ca/e5/d708d262b600a352abe01c2ae360d8ff75b0af819b78e9af293191d928e6/rich_click-1.9.7-py3-none-any.whl
       - pypi: git+https://github.com/nmarticorena/robotics-toolbox-python.git#d0716acd762725baf47dadb1709b3781f7db05f3
@@ -802,6 +801,7 @@ environments:
       - pypi: git+https://github.com/nmarticorena/spatialmath-python.git#e18684da6fe4a76625aef65d38f107ee451d037a
       - pypi: git+https://github.com/nmarticorena/swift.git#0a8900c01736db66cc5457eaef50495b776e54ff
       - pypi: git+https://github.com/nmarticorena/teleimager.git?rev=ed0c8d3#ed0c8d39de62e32a5c0bdb4d6e4b2d970335d67b
+      - pypi: https://files.pythonhosted.org/packages/ea/18/c7b57e20df0ecf19c0512d513dccdffccc8ccfdefaabe4150f2609f5e9a0/urchin-0.0.30-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c6/59/7d02447a55b2e55755011a647479041bc92a82e143f96a8195cb33bd0a1c/virtualenv-21.2.0-py3-none-any.whl
       - pypi: ../motion_tools
       - pypi: ./
@@ -2942,7 +2942,7 @@ packages:
   - pkg:pypi/fqdn?source=hash-mapping
   size: 16705
   timestamp: 1733327494780
-- pypi: git+https://github.com/nmarticorena/frankx.git?rev=legacy_version#5aae4d5e549969f4f31e2847fe007833081a172b
+- pypi: git+https://github.com/nmarticorena/frankx.git?rev=legacy_version#19a14b078d4b3a5c68f02538f5575fa7935f0936
   name: frankx
   version: 0.1.1
   requires_python: '>=3.6'
@@ -7545,8 +7545,8 @@ packages:
   timestamp: 1767634121080
 - pypi: ../motion_tools
   name: motion-tools
-  version: 0.1.21.dev6+ge075147bb
-  sha256: 7bb976a3c37d9595232445c51910338e374b942292799be75bcd4e7cab5791d4
+  version: 0.1.21.dev6+ge075147bb.d20260410
+  sha256: b1860b5214abbdc9d203a67676d612c54aa8bd3a71ed87411fe70502772e6ef9
   requires_dist:
   - hatchling>=1.28.0,<2
   - numpy>=2.0.0,<3
@@ -7554,8 +7554,9 @@ packages:
   - scipy>=1.15.0,<2
   - spatialmath-python
   - tyro>=1.0.6,<2
-  - urdfpy>=0.0.22,<0.0.23
+  - urchin
   requires_python: '>=3.10.0,<3.15'
+  editable: true
 - conda: https://conda.anaconda.org/conda-forge/linux-64/mpc-1.3.1-h24ddda3_1.conda
   sha256: 1bf794ddf2c8b3a3e14ae182577c624fa92dea975537accff4bc7e5fea085212
   md5: aa14b9a5196a6d8dd364164b7ce56acf
@@ -9430,6 +9431,29 @@ packages:
   - pkg:pypi/pyrepl?source=hash-mapping
   size: 48923
   timestamp: 1752823164082
+- pypi: https://files.pythonhosted.org/packages/03/43/00e9f7a133ef5fb30dab75e8c39b0fd9640129ed52c8202a86ef7aaf4363/pyribbit-0.1.46-py3-none-any.whl
+  name: pyribbit
+  version: 0.1.46
+  sha256: 0d4943f7cc6903f20ef42787e9357d7bb25c95f2c04da9dfa1a8021bdf9e0ab6
+  requires_dist:
+  - freetype-py
+  - imageio
+  - networkx
+  - numpy
+  - pillow
+  - pyglet>=1.4.10
+  - pyopengl>=3.1.0
+  - scipy
+  - six
+  - trimesh
+  - flake8 ; extra == 'dev'
+  - pre-commit ; extra == 'dev'
+  - pytest ; extra == 'dev'
+  - pytest-cov ; extra == 'dev'
+  - tox ; extra == 'dev'
+  - sphinx ; extra == 'docs'
+  - sphinx-rtd-theme ; extra == 'docs'
+  - sphinx-automodapi ; extra == 'docs'
 - conda: https://conda.anaconda.org/conda-forge/noarch/pyserial-3.5-pyhcf101f3_2.conda
   sha256: 8c618e8ca376d73133c9971abe45463a48c9cfb529788d609fd19568764941ba
   md5: b27a6cd32160c34682ce6053b04c12c6
@@ -10250,6 +10274,7 @@ packages:
   name: rs-imle-policy
   version: 0.1.0
   sha256: 1e750ff66b7b0fbba42408f9742425ce405a178a5bf631a96136b803b9bbd9c1
+  editable: true
 - conda: https://conda.anaconda.org/conda-forge/linux-64/rsync-3.4.1-h078a6ae_3.conda
   sha256: e5afc1a2f018e1092abdfe0edc73971849e30b57a65abc41cb48c41c1c35a52a
   md5: 2891a429edb188a134121d8e92a51a22
@@ -11479,6 +11504,28 @@ packages:
   purls: []
   size: 307887
   timestamp: 1764772751439
+- pypi: https://files.pythonhosted.org/packages/ea/18/c7b57e20df0ecf19c0512d513dccdffccc8ccfdefaabe4150f2609f5e9a0/urchin-0.0.30-py3-none-any.whl
+  name: urchin
+  version: 0.0.30
+  sha256: d27175e81a8ab348eaeda004225c88b926c809a92e297134cb4c64b6e0f78bf6
+  requires_dist:
+  - lxml
+  - networkx
+  - numpy>=1.20
+  - pillow
+  - pycollada>=0.6
+  - pyribbit>=0.1.46
+  - scipy
+  - trimesh
+  - flake8 ; extra == 'dev'
+  - pre-commit ; extra == 'dev'
+  - pytest ; extra == 'dev'
+  - pytest-cov ; extra == 'dev'
+  - tox ; extra == 'dev'
+  - sphinx ; extra == 'docs'
+  - sphinx-rtd-theme ; extra == 'docs'
+  - sphinx-automodapi ; extra == 'docs'
+  requires_python: '>=3.9'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/urdfdom-5.1.0-h8631160_0.conda
   sha256: 05e426812bd791122bc653ed9b38002615a94c2b174064d0f91282c62db8c589
   md5: c61b32949a30c4e6b2893c9c0178447d
