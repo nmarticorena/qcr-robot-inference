@@ -2,6 +2,7 @@ from rs_imle_policy.configs.train_config import (
     ExperimentConfig,
     RSIMLE,
     Diffusion,
+    FlowMatching,
     DataConfig,
 )
 from dataclasses import dataclass, field
@@ -65,9 +66,26 @@ class PickPlaceDiffusionRelativeConfig(ExperimentConfig):
     model: RSIMLE | Diffusion = field(default_factory=Diffusion)
     data: DataConfig = field(default_factory=RelativeActionsConfig)
 
+@dataclass
+class PickPlaceFlowMatchingConfig(ExperimentConfig):
+    """Pick and place task with Diffusion using absolute actions"""
+
+    model: FlowMatching = field(default_factory=FlowMatching)
+    data: DataConfig = field(default_factory=AbsoluteActionsConfig)
+
+
+@dataclass
+class PickPlaceFlowMatchingRelativeConfig(ExperimentConfig):
+    """Pick and place task with Diffusion using relative actions"""
+
+    model: FlowMatching = field(default_factory=FlowMatching)
+    data: DataConfig = field(default_factory=RelativeActionsConfig)
+
 ExperimentConfigChoice = (
     PickPlaceRSMLEConfig
     | PickPlaceRSMLERelativeConfig
     | PickPlaceDiffusionConfig
     | PickPlaceDiffusionRelativeConfig
+    | PickPlaceFlowMatchingConfig
+    | PickPlaceFlowMatchingRelativeConfig
 )
