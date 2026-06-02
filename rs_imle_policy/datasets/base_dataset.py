@@ -24,6 +24,10 @@ from torch.utils.data import Dataset
 from rs_imle_policy.configs.train_config import VisionConfig
 
 
+RAW_ORIENTATION_PREFIXES = ("orien_",)
+RAW_ORIENTATION_SUFFIXES = ("_orien",)
+
+
 class BaseDataset(Dataset, abc.ABC):
     """
     Base dataset example for robot manipulation demostrations
@@ -44,6 +48,7 @@ class BaseDataset(Dataset, abc.ABC):
         action_keys: tuple[str, ...] = (),
         vision_config: VisionConfig = VisionConfig(),
         visualize: bool = False,
+        skip_normalization_keys: tuple[str, ...] = (),
     ):
         self.dataset_path = dataset_path
         self.pred_horizon = pred_horizon
@@ -54,6 +59,7 @@ class BaseDataset(Dataset, abc.ABC):
         self.action_keys = action_keys
         self.vision_config = vision_config
         self.visualize = visualize
+        self.skip_normalization_keys = skip_normalization_keys
 
         self.transform = transform or transforms.Compose(
             [
@@ -105,15 +111,45 @@ class BaseDataset(Dataset, abc.ABC):
     def compute_normalization_stats(self):
         """Compute normalization statistics for all data keys."""
 
-        def get_data(key: str):
-            data = np.concatenate(
+        def get_data(key: str) -> NDArray:
+            return np.concatenate(
                 [np.array(self.rlds[episode][key]) for episode in self.rlds.keys()],
                 axis=0,
             )
-            self.stats[key] = get_data_stats(data)
+
+        def get_key_stats(key: str) -> dict:
+            data = get_data(key)
+            if self.skip_normalization(key):
+                return get_identity_data_stats(data)
+            return get_data_stats(data)
+
+        def get_composite_stats(keys: tuple[str, ...]) -> dict:
+            mins = []
+            maxes = []
+            for key in keys:
+                key_stats = get_key_stats(key)
+                mins.append(np.asarray(key_stats["min"]).reshape(-1))
+                maxes.append(np.asarray(key_stats["max"]).reshape(-1))
+            return {
+                "min": np.concatenate(mins, axis=0),
+                "max": np.concatenate(maxes, axis=0),
+            }
 
         for keys in self.rlds[0].keys():
-            get_data(keys)
+            if keys == "state" and self.low_dim_obs_keys:
+                self.stats[keys] = get_composite_stats(self.low_dim_obs_keys)
+            elif keys == "action" and self.action_keys:
+                self.stats[keys] = get_composite_stats(self.action_keys)
+            else:
+                self.stats[keys] = get_key_stats(keys)
+
+    def skip_normalization(self, key: str) -> bool:
+        """Return True when a key should pass through normalization unchanged."""
+        return (
+            key in self.skip_normalization_keys
+            or key.startswith(RAW_ORIENTATION_PREFIXES)
+            or key.endswith(RAW_ORIENTATION_SUFFIXES)
+        )
 
     def normalize_rlds(self) -> None:
         """Apply normalization to every key in each episode."""
@@ -256,6 +292,15 @@ def get_data_stats(data: NDArray) -> dict:
     """
     stats = {"min": np.min(data, axis=0), "max": np.max(data, axis=0)}
     return stats
+
+
+def get_identity_data_stats(data: NDArray) -> dict:
+    """Compute stats that make min/max normalization a no-op."""
+    feature_shape = np.asarray(data).shape[1:]
+    return {
+        "min": np.full(feature_shape, -1.0, dtype=np.float32),
+        "max": np.full(feature_shape, 1.0, dtype=np.float32),
+    }
 
 
 def normalize_data(data: NDArray, stats: dict) -> NDArray:
