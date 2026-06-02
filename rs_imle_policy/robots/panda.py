@@ -15,7 +15,7 @@ DEFAULT_ROBOT_IP = "172.16.0.2"
 DEFAULT_GRIPPER_SPEED = 0.1
 DEFAULT_GRIPPER_FORCE = 40
 GRIPPER_OPEN_WIDTH = 0.08
-DEFAULT_DYNAMIC_REL = 0.4
+DEFAULT_DYNAMIC_REL = 0.2
 CARTESIAN_IMPEDANCE = [400.0, 400.0, 400.0, 40.0, 40.0, 40.0]
 ACCEL_REL = 0.1
 JERK_REL = 0.1
@@ -86,8 +86,8 @@ class FrankxRobot(BaseRobot):
     def initialize_cartesian_impedance(self):
         """Initialize Cartesian impedance control parameters."""
         self.robot.set_cartesian_impedance(CARTESIAN_IMPEDANCE)
-        self.robot.accel_rel = ACCEL_REL
-        self.robot.jerk_rel = JERK_REL
+        # self.robot.accel_rel = ACCEL_REL
+        # self.robot.jerk_rel = JERK_REL
 
     def move_to_start(self, home_config: Optional[NDArray]):
         """Move robot to starting configuration.
@@ -181,6 +181,26 @@ class FrankxRobot(BaseRobot):
         if self.dry_run:
             return
         self.motion.set_next_waypoints(waypoints)
+
+    def get_next_waypoints(self, translations, orientations, relative: bool = False):
+        """Get the next waypoints for the robot to follow.
+
+        Args:
+            translations: Array of shape (N, 3) containing target positions
+            orientations: Array of shape (N, 4) in quaternion format [w, x, y, z]
+            relative: If True, waypoints are relative to current pose (not yet implemented)
+
+        Returns:
+            List of Waypoint objects corresponding to the input translations and orientations
+        """
+        ref = Waypoint.Relative if relative else Waypoint.Absolute
+
+        waypoints = [
+            Waypoint(Affine(trans[0], trans[1], trans[2], q[0], q[1], q[2], q[3]), ref)
+            for trans, q in zip(translations, orientations)
+        ]
+        return waypoints
+
 
     def init_waypoint_motion(self):
         """Initialize waypoint motion controller.
