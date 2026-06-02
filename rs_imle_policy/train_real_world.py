@@ -8,35 +8,12 @@ import numpy as np
 import copy
 import time
 from rs_imle_policy.policy import Policy
+from rs_imle_policy.loss import rs_imle_loss
 import os
 
-from rs_imle_policy.configs.train_config import ExperimentConfig, Diffusion, RSIMLE
+from rs_imle_policy.configs.train_config import ExperimentConfig, Diffusion, RSIMLE, FlowMatching
 
 
-def rs_imle_loss(real_samples, fake_samples, epsilon=0.1):
-    B, T, D = real_samples.shape
-    n_samples = fake_samples.shape[1]
-
-    real_flat = real_samples.reshape(B, 1, -1)
-    fake_flat = fake_samples.reshape(B, n_samples, -1)
-
-    distances = torch.cdist(real_flat, fake_flat).squeeze(1)
-    valid_samples = (distances > epsilon).float()
-    wandb.log(
-        {
-            "max_distance": distances.max().item(),
-            "min_distance": distances.min().item(),
-            "mean_distance": distances.mean().item(),
-            "epsilon": epsilon,
-        }
-    )
-    min_distances, _ = (distances + (1 - valid_samples) * distances.max()).min(dim=1)
-    valid_real_samples = (min_distances < distances.max()).float()
-    if valid_real_samples.sum() > 0:
-        loss = (min_distances * valid_real_samples).sum() / valid_real_samples.sum()
-    else:
-        loss = torch.tensor(0.0, device=real_samples.device)
-    return loss
 
 
 def process_image(images, vision_encoder, device):
@@ -114,6 +91,17 @@ def train(
                     fake_actions = fake_actions.reshape(B, args.model.n_samples_per_condition, *naction.shape[1:])
 
                     loss = rs_imle_loss(naction, fake_actions, args.model.epsilon)
+                elif isinstance(args.model, FlowMatching):
+                    noise = torch.randn(naction.shape, device=device)
+                    t = torch.rand(B, device=device)
+                    t_shaped = t.reshape(-1, *([1] * (noise.dim() - 1)))
+                    xt = t_shaped * naction + (1 - t_shaped) * noise
+                    vector = naction - noise
+                    timesteps = (t * args.model.timestep_integer_scaler).long()
+                    pred = nets['noise_pred_net'](
+                        xt, timesteps, global_cond=obs_cond)
+                    loss = nn.functional.mse_loss(pred, vector)
+
                 else:
                     raise NotImplementedError
 

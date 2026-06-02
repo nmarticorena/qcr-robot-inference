@@ -229,6 +229,13 @@ class RSIMLE(BaseModel):
     traj_consistency: bool = False
     periodic_length: int = 5  # C steps for a new trajectory to be selected eq(6)
 
+@dataclass
+class FlowMatching(BaseModel):
+    """Flow Matching model configuration"""
+
+    name: str = "flow_matching"
+    timestep_integer_scaler: int = 100 # from defaults of RS-IMLE repo
+
 
 @dataclass
 class Diffusion(BaseModel):
