@@ -110,6 +110,8 @@ def train(
                     wandb.log({"zero_loss": 1})
                 else:
                     loss.backward()
+                    if args.model.use_clamping:
+                        torch.nn.utils.clip_grad_norm_(nets.parameters(), max_norm=1.0)
                     optimizer.step()
                     optimizer.zero_grad()
                     lr_scheduler.step()
