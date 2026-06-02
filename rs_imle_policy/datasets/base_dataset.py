@@ -191,7 +191,7 @@ class BaseDataset(Dataset, abc.ABC):
             Dictionary mapping camera names to frame arrays
         """
         frames = {}
-        video = self.cached_dataset[str(episode)]
+        video = self.cached_dataset[str(episode).zfill(4)]
         for key in self.vision_config.cameras:
             frame = video[key][start_frame : start_frame + self.obs_horizon]
             frames[key] = np.array([self.transform(f) for f in frame])
