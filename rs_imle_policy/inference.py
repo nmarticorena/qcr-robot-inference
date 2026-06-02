@@ -15,6 +15,7 @@ from numpy.typing import NDArray
 import reactivex as rx
 from reactivex import operators as ops
 from reactivex.scheduler import NewThreadScheduler
+from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
 import rs_imle_policy.utils.transforms as transform_utils
 import rs_imle_policy.utils.viz as viz_utils
@@ -272,7 +273,7 @@ class RobotInferenceController:
                 )
                 naction = noisy_action
                 # Initialize scheduler
-                assert self.policy.noise_scheduler is not None
+                assert isinstance(self.policy.noise_scheduler, DDPMScheduler)
                 self.policy.noise_scheduler.set_timesteps(self.config.model.num_diffusion_iters)
 
                 for k in self.policy.noise_scheduler.timesteps:
