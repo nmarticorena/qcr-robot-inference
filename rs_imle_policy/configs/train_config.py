@@ -198,14 +198,14 @@ class OptimConfig:
 
     lr: float = 1e-4
     weight_decay: float = 1e-6
-    num_epochs: int = 1200
+    num_epochs: int = 1000
     batch_size: int = 64
-    num_workers: int = 11
+    num_workers: int = 16
     lr_scheduler_profile: str = "cosine"
     num_warmup_steps: int = 500
     eval_interval: int = 10
     num_eval_episodes: int = 1
-    save_period: int = 10
+    save_period: int = 50
 
 
 @dataclass
@@ -217,6 +217,7 @@ class BaseModel:
     pred_horizon: int = 16
     action_horizon: int = 8
     obs_horizon: int = 2
+    use_clamping: bool = False
 
 
 @dataclass
@@ -224,8 +225,8 @@ class RSIMLE(BaseModel):
     """RS-IMLE model configuration"""
 
     name: str = "rs_imle"
-    n_samples_per_condition: int = 10
-    epsilon: float = 0.1
+    n_samples_per_condition: int = 20
+    epsilon: float = 0.03
     traj_consistency: bool = False
     periodic_length: int = 5  # C steps for a new trajectory to be selected eq(6)
 
@@ -235,6 +236,7 @@ class FlowMatching(BaseModel):
 
     name: str = "flow_matching"
     timestep_integer_scaler: int = 100 # from defaults of RS-IMLE repo
+    use_clamping: bool = True
 
 
 @dataclass
