@@ -16,7 +16,7 @@ from diffusers.optimization import get_scheduler
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from diffusers.training_utils import EMAModel
 
-from rs_imle_policy.configs.train_config import Diffusion, ExperimentConfig, RSIMLE
+from rs_imle_policy.configs.train_config import Diffusion, ExperimentConfig, RSIMLE, FlowMatching
 from rs_imle_policy.datasets import BaseDataset
 from rs_imle_policy.network import (
     DiffusionConditionalUnet1D,
@@ -127,21 +127,23 @@ class Policy:
         print(f"Loading pretrained weights from epoch {epoch_str}...")
         if isinstance(self.config.model, Diffusion):
             print("Loading pretrained weights for diffusion model")
-            self.ema_nets = copy.deepcopy(self.nets)
+            # self.ema_nets = copy.deepcopy(self.nets)
 
             fpath_ema = os.path.join(self.folder, f"ema_net_epoch_{epoch_str}.pth")
-            state_dict_ema = torch.load(fpath_ema, map_location=self.device)
-            self.ema_nets.load_state_dict(state_dict_ema)
-
-            if self.precision == torch.float16:
-                self.nets.half()
-                self.ema_nets.half()
-
-            self.ema = EMAModel(parameters=self.ema_nets.parameters(), power=0.75)
+            self.nets.load_state_dict(torch.load(fpath_ema, map_location=self.device))
+            # state_dict_ema = torch.load(fpath_ema, map_location=self.device)
+            # self.nets.load_state_dict(state_dict_ema)
+            # self.ema_nets.load_state_dict(state_dict_ema)
+            #
+            # if self.precision == torch.float16:
+            #     self.nets.half()
+            #     self.ema_nets.half()
+            #
+            # self.ema = EMAModel(parameters=self.ema_nets.parameters(), power=0.75)
 
         elif isinstance(self.config.model, RSIMLE):
             print("Loading pretrained weights for RS-IMLE model")
-            fpath = os.path.join(self.folder, f"net_epoch_{epoch_str}.pth")
+            fpath = os.path.join(self.folder, f"ema_net_epoch_{epoch_str}.pth")
             self.nets.load_state_dict(torch.load(fpath, map_location=self.device))
 
         print("Pretrained weights loaded.")
@@ -176,6 +178,18 @@ class Policy:
                 {
                     **vision_encoders,
                     "generator": generator,
+                }
+            )
+
+        elif isinstance(self.config.model, FlowMatching):
+            noise_pred_net = DiffusionConditionalUnet1D(
+                input_dim=self.config.action_shape,
+                global_cond_dim=self.config.obs_shape * self.config.model.obs_horizon,
+            )
+            nets = nn.ModuleDict(
+                {
+                    **vision_encoders,
+                    "noise_pred_net": noise_pred_net,
                 }
             )
 
