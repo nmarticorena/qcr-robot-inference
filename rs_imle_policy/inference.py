@@ -119,8 +119,10 @@ class RobotInferenceController:
         timeout: int,
         dry_run: bool = False,
         home_q: Optional[NDArray] = None,
+        folder: Path = None,
     ):
         self.infer_idx = 0
+        self.folder = folder
         self.last_called_obs = time.time()
         self.seed(DEFAULT_SEED)
         self.config = config
@@ -161,7 +163,7 @@ class RobotInferenceController:
     def setup_diffusion_policy(self):
         """Initialize the policy model and observation buffer."""
         torch.cuda.empty_cache()
-        self.policy = Policy(self.config, training = False)
+        self.policy = Policy(self.config, training = False, folder=self.folder)
 
         self.obs_horizon = self.config.model.obs_horizon
         self.obs_deque = collections.deque(maxlen=self.config.model.obs_horizon)

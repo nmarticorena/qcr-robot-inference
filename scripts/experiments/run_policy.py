@@ -125,6 +125,7 @@ controller = RobotInferenceController(
     timeout=args.timeout,
     dry_run=args.dry_run,
     home_q=evaluation_home_q,
+    folder=args.path,
 )
 
 try:

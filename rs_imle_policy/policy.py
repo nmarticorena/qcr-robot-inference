@@ -47,6 +47,7 @@ class Policy:
         self,
         config: ExperimentConfig,
         training: bool,
+        folder: str = None,
         dataset: BaseDataset | None = None,
     ):
         """Initialize the policy.
@@ -98,11 +99,7 @@ class Policy:
 
             print("Training Mode.")
         else:
-            self.folder = os.path.join(
-                "saved_weights",
-                self.config.task_name,
-                self.config.model.name + "_" + self.config.exp_name,
-            )
+            self.folder = folder
             stats_path = os.path.join(self.folder, "stats.pkl")
             self.stats = pickle.load(open(stats_path,"rb"))
 
