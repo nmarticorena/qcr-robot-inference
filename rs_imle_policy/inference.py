@@ -312,19 +312,34 @@ class RobotInferenceController:
                         device=self.policy.device,
                     )
                     batched_naction = self.policy.nets["generator"](noise, global_cond=obs_cond)
-                    prev_traj_end = self.prev_traj[:, 8:].reshape(1, -1)
-                    gen_traj_start = batched_naction[:, :8, :].reshape(32, -1)
+                    current_pos = self.robot.pos.copy()
+                    current_rot = self.robot.rot.copy()
+                    split_idx = self.config.model.pred_horizon // 2
 
-                    # Pick the generated trajectory that has its start closest to the end of the prev traj
-                    distances = torch.cdist(gen_traj_start, prev_traj_end)
-                    min_idx = distances.argmin(dim=0)
-                    action_debug = unnormalize_data(
-                        batched_naction.cpu().numpy(),
-                        stats=self.policy.stats["action"],
+                    comparison_actions = self.actions_for_consistency(
+                        batched_naction,
+                        current_pos,
+                        current_rot,
                     )
-                    naction = batched_naction[min_idx]
 
-                    action_debug_pos = action_debug[:, :, :3].reshape(-1, 3)
+                    if self.prev_traj is None or self.prev_traj_pos is None or self.prev_traj_rot is None:
+                        min_idx = np.random.randint(0, batched_naction.shape[0])
+                        distances = torch.zeros((batched_naction.shape[0], 1), device=self.policy.device)
+                    else:
+                        prev_comparison_actions = self.actions_for_consistency(
+                            self.prev_traj,
+                            self.prev_traj_pos,
+                            self.prev_traj_rot,
+                        )
+                        prev_traj_end = prev_comparison_actions[:, split_idx:].reshape(1, -1)
+                        gen_traj_start = comparison_actions[:, :split_idx].reshape(batched_naction.shape[0], -1)
+
+                        # Pick the generated trajectory that has its start closest to the end of the prev traj.
+                        distances = torch.cdist(gen_traj_start, prev_traj_end)
+                        min_idx = int(distances.argmin().item())
+
+                    naction = batched_naction[min_idx : min_idx + 1]
+                    action_debug_pos = comparison_actions[:, :, :3].reshape(-1, 3).cpu().numpy()
                     colors = distances.repeat_interleave(self.config.model.pred_horizon, 0)
                     rr.log(
                         "/debug/sampled_trajectories",
@@ -340,11 +355,14 @@ class RobotInferenceController:
                     )
 
                     if self.infer_idx % self.config.model.periodic_length == 0:
-                        index = np.random.uniform(0, 32, size=1)[0].astype(int)
-                        self.prev_traj = batched_naction[index, :, :].unsqueeze(0)
-
+                        index = np.random.randint(0, batched_naction.shape[0])
+                        self.set_prev_traj(
+                            batched_naction[index : index + 1],
+                            current_pos,
+                            current_rot,
+                        )
                     else:
-                        self.prev_traj = naction
+                        self.set_prev_traj(naction, current_pos, current_rot)
 
                 else:
                     noise = torch.randn(
@@ -387,6 +405,32 @@ class RobotInferenceController:
                 rr.Transform3D(translation=trans[i], mat3x3=rots[i]),
                 rr.TransformAxes3D(axis_length=0.1),
             )
+
+    def set_prev_traj(self, traj: torch.Tensor, pos: NDArray, rot: NDArray) -> None:
+        self.prev_traj = traj.detach().clone()
+        self.prev_traj_pos = np.array(pos, copy=True)
+        self.prev_traj_rot = np.array(rot, copy=True)
+
+    def actions_for_consistency(
+        self,
+        nactions: torch.Tensor,
+        pos: NDArray,
+        rot: NDArray,
+    ) -> torch.Tensor:
+        actions = unnormalize_data(nactions.detach().cpu().numpy(), stats=self.policy.stats["action"])
+
+        if self.config.data.action_relative:
+            absolute_actions = actions.copy()
+            for batch_idx in range(actions.shape[0]):
+                trans = actions[batch_idx, :, :3]
+                rot_6d = actions[batch_idx, :, 3:9]
+                rot_mats = transform_utils.rotation_6d_to_matrix(torch.from_numpy(rot_6d)).numpy()
+                trans, rot_mats = self.transform_action_to_absolute(trans, rot_mats, pos, rot)
+                absolute_actions[batch_idx, :, :3] = trans
+                absolute_actions[batch_idx, :, 3:9] = transform_utils.matrix_to_rotation_6d(rot_mats).numpy()
+            actions = absolute_actions
+
+        return torch.from_numpy(actions).to(self.policy.device, dtype=self.policy.precision)
 
     @staticmethod
     def transform_action_to_absolute(
