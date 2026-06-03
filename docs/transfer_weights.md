@@ -9,10 +9,14 @@ The available options are:
 │ --remote STR       (default: hpc)                                     │
 │ --remote-root STR  (default: repos/qcr-robot-inference/saved_weights) │
 │ --local-root PATH  (default: saved_weights)                           │
+│ --epochs [INT [INT ...]]                                              │
+│                    (default: 350 750)                                 │
+│ --include-last, --no-include-last                                     │
+│                    (default: True)                                    │
 ╰───────────────────────────────────────────────────────────────────────╯
 ```
 
-This will copy the latest weigth of your experiment, and also store the `stats.pkl` for your normalisation metrics and the `experiment_config.yaml` to load state/action keys and which cameras to utilise
+This will copy the selected EMA checkpoint epochs, formatted as four digits, plus the latest weight by default. For example, `--epochs 50 350 750` transfers `ema_net_epoch_0050.pth`, `ema_net_epoch_0350.pth`, and `ema_net_epoch_0750.pth`. It will also store the `stats.pkl` for your normalisation metrics and the `experiment_config.yaml` to load state/action keys and which cameras to utilise.
 
 
 Here we recommend to add a host alias to your ssh config

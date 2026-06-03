@@ -15,6 +15,8 @@ class Config:
     remote: str = "hpc"
     remote_root: str = "repos/qcr-robot-inference/saved_weights"
     local_root: Path = Path("saved_weights")
+    epochs: tuple[int, ...] = (350, 750)
+    include_last: bool = True
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,21 @@ def run(cmd: list[str], *, capture: bool = False) -> str:
         stderr=subprocess.PIPE if capture else None,
     )
     return result.stdout if capture else ""
+
+
+def weight_include_patterns(config: Config) -> list[str]:
+    patterns: list[str] = []
+
+    if config.include_last:
+        patterns.append("ema_net_epoch_last.pth")
+
+    for epoch in config.epochs:
+        if epoch < 0:
+            raise ValueError(f"Epochs must be non-negative, got {epoch}.")
+
+        patterns.append(f"ema_net_epoch_{epoch:04d}.pth")
+
+    return patterns
 
 
 def list_remote_experiments(config: Config) -> list[RemoteExperiment]:
@@ -99,12 +116,15 @@ def transfer_experiment(exp: RemoteExperiment, config: Config) -> None:
     local_path = exp.local_path(config)
     local_path.mkdir(parents=True, exist_ok=True)
 
+    weight_includes = [
+        f"--include={pattern}" for pattern in weight_include_patterns(config)
+    ]
+
     cmd = [
         "rsync",
         "-avzP",
         "--include=*/",
-        "--include=*_last.pth",
-        "--include=*last*.pth",
+        *weight_includes,
         "--include=*.yaml",
         "--include=*.yml",
         "--include=*.pkl",
