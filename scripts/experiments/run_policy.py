@@ -92,7 +92,7 @@ args = tyro.cli(LoaderConfig)
 if args.exp_name is not None:
     exp_name = args.exp_name
 else:
-    exp_name = inquirer.text("Enter the experiment name: ").execute()
+    exp_name = inquirer.text("Enter the experiment name: ", default = args.path.parts[-1]).execute()
     exp_name = re.sub(r"\s+", "_", exp_name.strip())
 
 config = tyro.extras.from_yaml(ExperimentConfig, open(args.path / "config.yaml"))
