@@ -49,6 +49,9 @@ class BaseDataset(Dataset, abc.ABC):
         vision_config: VisionConfig = VisionConfig(),
         visualize: bool = False,
         skip_normalization_keys: tuple[str, ...] = (),
+        save_normalization_stats: Optional[bool] = None,
+        normalize: bool = True,
+        load_images: bool = True,
     ):
         self.dataset_path = dataset_path
         self.pred_horizon = pred_horizon
@@ -60,6 +63,9 @@ class BaseDataset(Dataset, abc.ABC):
         self.vision_config = vision_config
         self.visualize = visualize
         self.skip_normalization_keys = skip_normalization_keys
+        self.save_normalization_stats = not visualize if save_normalization_stats is None else save_normalization_stats
+        self.normalize = normalize
+        self.load_images = load_images
 
         self.transform = transform or transforms.Compose(
             [
@@ -72,15 +78,18 @@ class BaseDataset(Dataset, abc.ABC):
         self.rlds = self.create_rlds_dataset()
         self.stats: dict[str, dict[str, NDArray]] = defaultdict(dict)
         self.compute_normalization_stats()
-        if not visualize:
+        if self.save_normalization_stats:
             with open(self.dataset_path / "stats.pkl", "wb") as f:
                 pkl.dump(dict(self.stats), f)
 
         self.indices = self.create_sample_indices(self.rlds, sequence_length=self.pred_horizon)
-        self.normalize_rlds()
+        if self.normalize:
+            self.normalize_rlds()
 
-        self.cached_dataset = h5py.File(self.dataset_path / "images.h5", "r")
-        assert self.cached_dataset is not None, "Failed to load cached dataset from HDF5 file."
+        self.cached_dataset = None
+        if self.load_images:
+            self.cached_dataset = h5py.File(self.dataset_path / "images.h5", "r")
+            assert self.cached_dataset is not None, "Failed to load cached dataset from HDF5 file."
 
         if not visualize:
             self.low_dim_obs_shape = self.rlds[0]["state"].shape[1]
@@ -190,6 +199,9 @@ class BaseDataset(Dataset, abc.ABC):
         Returns:
             Dictionary mapping camera names to frame arrays
         """
+        if self.cached_dataset is None:
+            raise RuntimeError("Image cache was not loaded. Instantiate the dataset with load_images=True.")
+
         frames = {}
         video = self.cached_dataset[str(episode).zfill(4)]
         for key in self.vision_config.cameras:
