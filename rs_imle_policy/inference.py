@@ -191,12 +191,12 @@ class RobotInferenceController:
         nagent_pos_np = normalize_data(agent_pos_np, stats=self.policy.stats["state"])
         nagent_pos = torch.from_numpy(nagent_pos_np).to(device, dtype=dtype)
 
-        if isinstance(self.config.model, Diffusion):
-            encoders = self.policy.ema_nets
-        elif isinstance(self.config.model, RSIMLE):
-            encoders = self.policy.nets
-        else:
-            raise NotImplementedError("Model not supported for inference.")
+        # if isinstance(self.config.model, Diffusion):
+        encoders = self.policy.nets
+        # elif isinstance(self.config.model, RSIMLE):
+            # encoders = self.policy.nets
+        # else:
+            # raise NotImplementedError("Model not supported for inference.")
 
         image_features = []
         with torch.no_grad():
@@ -278,7 +278,7 @@ class RobotInferenceController:
 
                 for k in self.policy.noise_scheduler.timesteps:
                     # Predict noise
-                    noise_pred = self.policy.ema_nets["noise_pred_net"](
+                    noise_pred = self.policy.nets["noise_pred_net"](
                         sample=naction, timestep=k, global_cond=obs_cond
                     )
 
