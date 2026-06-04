@@ -523,6 +523,29 @@ class RobotInferenceController:
         return RobotInferenceController._label_reference_frame(frame, text)
 
     @staticmethod
+    def _overlay_reference_frame(
+        live_frame: Optional[np.ndarray],
+        reference_frame: Optional[np.ndarray],
+        camera_name: str,
+    ) -> np.ndarray:
+        if live_frame is None:
+            return RobotInferenceController._blank_reference_frame(f"{camera_name}: live missing")
+
+        live = RobotInferenceController._resize_reference_frame(live_frame)
+        if reference_frame is None:
+            return RobotInferenceController._label_reference_frame(live, f"{camera_name}: live")
+
+        reference = cv2.resize(reference_frame, (live.shape[1], live.shape[0]))
+        overlay = cv2.addWeighted(
+            live,
+            1.0 - REFERENCE_OVERLAY_ALPHA,
+            reference,
+            REFERENCE_OVERLAY_ALPHA,
+            0,
+        )
+        return RobotInferenceController._label_reference_frame(overlay, f"{camera_name}: overlay")
+
+    @staticmethod
     def _pad_reference_width(frame: np.ndarray, width: int) -> np.ndarray:
         if frame.shape[1] == width:
             return frame
@@ -545,32 +568,15 @@ class RobotInferenceController:
         episode_idx: int,
         episodes: int,
     ) -> np.ndarray:
-        live_tiles = []
-        reference_tiles = []
+        overlay_tiles = []
         for camera_name in self.config.data.vision.cameras:
             live_frame = live_frames.get(camera_name)
             ref_frame = reference_frames.get(camera_name)
-            live_tiles.append(
-                self._label_reference_frame(
-                    self._resize_reference_frame(live_frame)
-                    if live_frame is not None
-                    else self._blank_reference_frame(f"{camera_name}: live"),
-                    f"{camera_name}: live",
-                )
-            )
-            reference_tiles.append(
-                self._label_reference_frame(
-                    self._resize_reference_frame(ref_frame)
-                    if ref_frame is not None
-                    else self._blank_reference_frame(f"{camera_name}: target"),
-                    f"{camera_name}: target",
-                )
-            )
+            overlay_tiles.append(self._overlay_reference_frame(live_frame, ref_frame, camera_name))
 
-        live_row = np.hstack(live_tiles)
-        reference_row = np.hstack(reference_tiles)
+        overlay_row = np.hstack(overlay_tiles)
 
-        footer = np.zeros((44, live_row.shape[1], 3), dtype=np.uint8)
+        footer = np.zeros((44, overlay_row.shape[1], 3), dtype=np.uint8)
         text = (
             f"Align scene to target. enter/space: start  q/esc: abort  "
             f"episode {episode_idx + 1}/{episodes}"
@@ -586,18 +592,18 @@ class RobotInferenceController:
             cv2.LINE_AA,
         )
 
-        width = max(live_row.shape[1], reference_row.shape[1], footer.shape[1])
+        width = max(overlay_row.shape[1], footer.shape[1])
         return np.vstack(
             [
-                self._pad_reference_width(live_row, width),
-                self._pad_reference_width(reference_row, width),
+                self._pad_reference_width(overlay_row, width),
                 self._pad_reference_width(footer, width),
             ]
         )
 
     def wait_for_experiment_setup(self, experiment: dict, episode_idx: int, episodes: int) -> None:
         reference_frames = self._load_reference_frames(experiment)
-        cv2.namedWindow(EVALUATION_WINDOW_NAME, cv2.WINDOW_NORMAL)
+        cv2.namedWindow(EVALUATION_WINDOW_NAME, cv2.WINDOW_FULLSCREEN)
+        cv2.resizeWindow(EVALUATION_WINDOW_NAME, 1280, 720)
         while True:
             images = self.perception_system.cams.get()
             live_frames = {
