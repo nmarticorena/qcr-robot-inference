@@ -626,9 +626,106 @@ class RobotInferenceController:
                 raise KeyboardInterrupt("Evaluation aborted by user.")
         cv2.destroyWindow(EVALUATION_WINDOW_NAME)
 
+    @staticmethod
+    def _prompt_experiment_success(episode_idx: int, episodes: int) -> bool:
+        while True:
+            response = input(
+                f"Did episode {episode_idx + 1}/{episodes} succeed? [y/n]: "
+            ).strip().lower()
+            if response in ("y", "yes"):
+                return True
+            if response in ("n", "no"):
+                return False
+            print("Please enter y or n.")
+
+    def _evaluation_results_path(self) -> Path:
+        return Path(f"saved_evaluation_media/{self.eval_name}/evaluation_results.json")
+
+    def _load_evaluation_results(self) -> list[dict]:
+        results_path = self._evaluation_results_path()
+        if not results_path.exists():
+            return []
+
+        with results_path.open("r") as f:
+            results = json.load(f)
+        if not isinstance(results, list):
+            raise ValueError(f"Evaluation results must be a list: {results_path}")
+        return results
+
+    def _save_evaluation_results(self, results: list[dict]) -> None:
+        results_path = self._evaluation_results_path()
+        with results_path.open("w") as f:
+            json.dump(results, f, indent=2)
+
+    @staticmethod
+    def _evaluation_result_ids(results: list[dict]) -> set[int]:
+        result_ids = set()
+        for result in results:
+            if "experiment_index" not in result:
+                continue
+            result_ids.add(int(result["experiment_index"]))
+        return result_ids
+
+    @staticmethod
+    def _confirm_duplicate_evaluation_results(
+        duplicate_ids: list[int],
+        results_path: Path,
+    ) -> None:
+        while True:
+            response = input(
+                f"Evaluation results already contain ids {duplicate_ids} in "
+                f"{results_path}. Append duplicate results? [y/N]: "
+            ).strip().lower()
+            if response in ("y", "yes"):
+                return
+            if response in ("", "n", "no"):
+                raise RuntimeError("Evaluation aborted to avoid duplicate result ids.")
+            print("Please enter y or n.")
+
+    @staticmethod
+    def _serialize_action_outputs(actions: np.ndarray) -> dict:
+        if actions.size == 0:
+            return {
+                "action_count": 0,
+                "action_poses": [],
+                "gripper_actions": [],
+                "progress_outputs": [],
+            }
+
+        positions = actions[:, :3]
+        rotations_6d = actions[:, 3:9]
+        quaternions = transform_utils.rotation_6d_to_quat(torch.from_numpy(rotations_6d)).numpy()
+        action_poses = [
+            {
+                "position": positions[i].tolist(),
+                "rotation_6d": rotations_6d[i].tolist(),
+                "quaternion": quaternions[i].tolist(),
+            }
+            for i in range(actions.shape[0])
+        ]
+        return {
+            "action_count": int(actions.shape[0]),
+            "action_poses": action_poses,
+            "gripper_actions": actions[:, -2].tolist(),
+            "progress_outputs": actions[:, -1].tolist(),
+        }
+
     def run_evaluation_experiments(self, experiments: list[dict]):
         """Run evaluation episodes guided by a saved experiment manifest."""
         episodes = len(experiments)
+        results = self._load_evaluation_results()
+        existing_result_ids = self._evaluation_result_ids(results)
+        requested_ids = [
+            int(experiment.get("index", i))
+            for i, experiment in enumerate(experiments)
+        ]
+        duplicate_ids = sorted(set(requested_ids) & existing_result_ids)
+        if duplicate_ids:
+            self._confirm_duplicate_evaluation_results(
+                duplicate_ids,
+                self._evaluation_results_path(),
+            )
+
         for i, experiment in enumerate(experiments):
             self.idx = int(experiment.get("index", i))
             print(f"Starting episode {i + 1}/{episodes}")
@@ -637,7 +734,17 @@ class RobotInferenceController:
             self.robot.move_to_start(self.home_q)
             self.wait_for_experiment_setup(experiment, i, episodes)
             self.obs_deque.clear()
-            self.inference_loop()
+            episode_log = self.inference_loop()
+            succeeded = self._prompt_experiment_success(i, episodes)
+            results.append(
+                {
+                    "episode": i,
+                    "experiment_index": self.idx,
+                    "success": succeeded,
+                    **episode_log,
+                }
+            )
+            self._save_evaluation_results(results)
             self.all_frames = defaultdict(list)
             print(f"Finished episode {i + 1}/{episodes}")
 
@@ -652,6 +759,7 @@ class RobotInferenceController:
         )
 
         start_time = time.time()
+        start_perf = time.perf_counter()
 
         all_actions = np.zeros((0, self.config.action_shape))
 
@@ -715,6 +823,10 @@ class RobotInferenceController:
 
         assert self.robot.move_async is not None
         self.robot.move_async.join()
+        return {
+            "duration_seconds": time.perf_counter() - start_perf,
+            **self._serialize_action_outputs(all_actions),
+        }
 
     def convert_actions(self, action: np.ndarray) -> tuple[list[np.ndarray], np.ndarray, list[sm.SE3]]:
         """Convert action array to different pose representations.
