@@ -663,7 +663,7 @@ class RobotInferenceController:
                 n_quads[0:action_horizon_len],
                 relative=relative,
             )
-            for i in range(0, int(len(action) / 2)):
+            for i in range(int(len(action))):
                 self.robot.motion.set_next_waypoints([waypoints[i]])
                 time.sleep(1 / DEFAULT_REFRESH_RATE_HZ)
                 if action[i][-2] > GRIPPER_CLOSE_THRESHOLD:
