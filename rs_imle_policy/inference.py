@@ -478,15 +478,26 @@ class RobotInferenceController:
             current_pos = translations[i]
         return translations, rotations
 
-    def run_experiments(self, episodes: int):
+    def run_experiments(self, episodes: int, initial_id: int = 0):
         """Run multiple evaluation episodes.
 
         Args:
-            episodes: Number of episodes to run
+            episodes: Exclusive max episode id to run
+            initial_id: Episode id to use for the first run
         """
-        for i in range(episodes):
-            self.idx = i
-            print(f"Starting episode {i + 1}/{episodes}")
+        if initial_id < 0:
+            raise ValueError(f"Initial id must be non-negative, got {initial_id}.")
+        if episodes <= initial_id:
+            raise ValueError(
+                f"Episodes must be greater than initial id when used as the max episode, "
+                f"got episodes={episodes} and initial_id={initial_id}."
+            )
+
+        episode_ids = range(initial_id, episodes)
+        total_episodes = episodes - initial_id
+        for i, episode_id in enumerate(episode_ids):
+            self.idx = episode_id
+            print(f"Starting episode {i + 1}/{total_episodes} (id {self.idx})")
             self.done = False
             time.sleep(0.1)
             self.robot.move_to_start(self.home_q)
@@ -495,7 +506,7 @@ class RobotInferenceController:
             self.obs_deque.clear()
             self.inference_loop()
             self.all_frames = defaultdict(list)
-            print(f"Finished episode {i + 1}/{episodes}")
+            print(f"Finished episode {i + 1}/{total_episodes} (id {self.idx})")
 
     @staticmethod
     def _resize_reference_frame(frame: np.ndarray) -> np.ndarray:
