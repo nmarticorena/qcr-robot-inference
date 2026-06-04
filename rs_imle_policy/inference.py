@@ -23,6 +23,7 @@ from rs_imle_policy.configs.train_config import (
     Diffusion,
     ExperimentConfig,
     RSIMLE,
+    FlowMatching,
     VisionConfig,
 )
 from rs_imle_policy.datasets.base_dataset import normalize_data, unnormalize_data
@@ -372,6 +373,22 @@ class RobotInferenceController:
                     # clip noise
                     noise = torch.clamp(noise, -1, 1)
                     naction = self.policy.nets["generator"](noise, global_cond=obs_cond)
+            elif isinstance(self.config.model, FlowMatching):
+                noisy_action = torch.randn((1, self.config.model.pred_horizon, self.config.action_shape), device=self.config.model.device) #, dtype=self.precision)
+                naction = noisy_action
+
+                ts = torch.linspace(0.0, 1.0, self.config.model.num_flow_iters+1, device=self.config.model.device)[:-1]
+                dt = 1.0 / self.config.model.num_flow_iters
+                for t in ts:
+                    timestep = (t * self.config.model.timestep_integer_scaler).long()
+
+                    # predict noise
+                    pred = self.policy.nets['noise_pred_net'](
+                        sample=naction,
+                        timestep=timestep,
+                        global_cond=obs_cond
+                    )
+                    naction = naction + pred * dt
             else:
                 raise NotImplementedError("Model not supported for inference.")
 
