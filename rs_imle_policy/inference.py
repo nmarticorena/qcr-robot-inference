@@ -799,7 +799,7 @@ class RobotInferenceController:
             rr.log("/action/gripper", rr.Scalars(action[0, -2].tolist()))
             rr.log("/action/progress", rr.Scalars(action[0, -1].tolist()))
 
-            action_horizon_len = int(len(action) / 2)
+            action_horizon_len = int(len(action))
             relative = self.config.data.action_relative
             waypoints = self.robot.get_next_waypoints(
                 n_trans[0:action_horizon_len],
