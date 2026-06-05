@@ -301,6 +301,7 @@ class PandaPyRobot:
             home_config: Joint configuration for home position, or None to skip
         """
         self.robot.teaching_mode(False)
+        self.robot.recover_from_errors()
         if home_config is not None:
             self.robot.move_to_joint_position(home_config)
         self.open_gripper()
