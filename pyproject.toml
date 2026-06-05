@@ -6,3 +6,7 @@ description = "real-robot-inference"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.ty.environment]
+python = ".pixi/envs/default/bin/python"
+python-version = "3.11"
