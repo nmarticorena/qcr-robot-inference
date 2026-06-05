@@ -823,9 +823,9 @@ class RobotInferenceController:
 
             elapsed_time = time.perf_counter() - infer_start_time
             rr.log("/debug/inference_time", rr.Scalars(elapsed_time))
-            remaining_time = target_dt - elapsed_time
-            if remaining_time > 0:
-                time.sleep(remaining_time)
+            # remaining_time = target_dt - elapsed_time
+            # if remaining_time > 0:
+            #     time.sleep(remaining_time)
 
             if (time.time() - start_time) > self.timeout:
                 print("Timeout reached, ending inference.")
