@@ -214,7 +214,12 @@ def create_mosaic_video(
                         if last_frames[ix] is None:
                             raise RuntimeError(f"No readable frames for {entry.path}.")
 
-                        tiles.append(make_tile(last_frames[ix], f"Episode {entry.episode} {entry.camera}"))
+                        if frame_idx < length:
+                            tiles.append(
+                                make_tile(last_frames[ix], f"Episode {entry.episode} {entry.camera}")
+                            )
+                        else:
+                            tiles.append(result_overlay_tile(entry, last_frames[ix]))
 
                     writer.write(make_grid(tiles))
                     progress.update()
@@ -240,7 +245,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Create per-episode mosaic videos from saved evaluation camera videos. "
-            "Shorter cameras hold their final frame until the longest camera finishes."
+            "Finished cameras hold their final frame with a green or red result overlay."
         )
     )
     parser.add_argument("run_dir", type=Path, help="Run folder, or path relative to saved_media.")
