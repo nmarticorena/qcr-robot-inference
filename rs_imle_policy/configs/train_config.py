@@ -236,6 +236,7 @@ class FlowMatching(BaseModel):
 
     name: str = "flow_matching"
     timestep_integer_scaler: int = 100 # from defaults of RS-IMLE repo
+    num_flow_iters: int = 1
     use_clamping: bool = True
 
 
@@ -256,7 +257,7 @@ class ExperimentConfig:
 
     exp_name: str
     dataset_path: pathlib.Path
-    model: Diffusion | RSIMLE
+    model: Diffusion | RSIMLE | FlowMatching
     task_name: str = "default"
     debug: bool = False
 
