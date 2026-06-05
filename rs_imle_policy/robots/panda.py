@@ -1,7 +1,9 @@
 from enum import Enum
+import time
+from typing import Optional
+
 import numpy as np
 from numpy.typing import NDArray
-from typing import Optional
 
 from frankx import Gripper, Robot, JointMotion, Waypoint, WaypointMotion, Affine
 from panda_py import Panda, libfranka
