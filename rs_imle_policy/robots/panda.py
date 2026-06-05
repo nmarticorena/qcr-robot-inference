@@ -20,7 +20,9 @@ GRIPPER_OPEN_WIDTH = 0.08
 DEFAULT_DYNAMIC_REL = 0.2
 CARTESIAN_IMPEDANCE = [400.0, 400.0, 400.0, 40.0, 40.0, 40.0]
 ACCEL_REL = 0.1
-JERK_REL = 0.1
+JERK_REL = 0.01
+SMOOTH_STOP_DURATION_S = 0.5
+SMOOTH_STOP_RATE_HZ = 10
 
 
 class GripperState(Enum):
@@ -88,8 +90,7 @@ class FrankxRobot(BaseRobot):
     def initialize_cartesian_impedance(self):
         """Initialize Cartesian impedance control parameters."""
         self.robot.set_cartesian_impedance(CARTESIAN_IMPEDANCE)
-        # self.robot.accel_rel = ACCEL_REL
-        # self.robot.jerk_rel = JERK_REL
+        self.robot.set_dynamic_rel(DEFAULT_DYNAMIC_REL, accel_rel=ACCEL_REL, jerk_rel=JERK_REL)
 
     def move_to_start(self, home_config: Optional[NDArray]):
         """Move robot to starting configuration.
