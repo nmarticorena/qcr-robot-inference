@@ -113,6 +113,7 @@ rich = ">=14.3.3,<15"
 inspire_hand_sdk = ">=1.0.0,<2"
 rsync = ">=3.4.1,<4"
 ruff = ">=0.15.14,<0.16"
+ty = ">=0.0.42,<0.0.43"
 
 [pypi-options]
 no-build-isolation = true
