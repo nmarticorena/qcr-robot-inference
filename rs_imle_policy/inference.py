@@ -807,18 +807,19 @@ class RobotInferenceController:
                 relative=relative,
             )
             for i in range(int(len(action))):
-                self.robot.motion.set_next_waypoints([waypoints[i]])
-                time.sleep(1 / DEFAULT_REFRESH_RATE_HZ)
                 if action[i][-2] > GRIPPER_CLOSE_THRESHOLD:
                     self.robot.close_gripper()
                 else:
                     self.robot.open_gripper()
 
-            if progress[0] >= PROGRESS_COMPLETE_THRESHOLD:
-                self.robot.stop_motion()
-                obs_stream.dispose()
-                self.record_videos()
-                self.done = True
+                time.sleep(1 / DEFAULT_REFRESH_RATE_HZ)
+                self.robot.motion.set_next_waypoints([waypoints[i]])
+            
+                if progress[i] >= PROGRESS_COMPLETE_THRESHOLD:
+                    self.robot.stop_motion()
+                    obs_stream.dispose()
+                    self.record_videos()
+                    self.done = True
 
             elapsed_time = time.perf_counter() - infer_start_time
             rr.log("/debug/inference_time", rr.Scalars(elapsed_time))
