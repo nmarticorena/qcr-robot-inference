@@ -115,13 +115,36 @@ class FrankxRobot(BaseRobot):
             self.gripper.open(blocking=False)
             self.gripper_state = GripperState.OPEN
 
-    def stop_motion(self, release: bool = True):
+    def stop_motion(
+        self,
+        release: bool = True,
+        smooth_stop_duration_s: float = SMOOTH_STOP_DURATION_S,
+        smooth_stop_rate_hz: float = SMOOTH_STOP_RATE_HZ,
+    ):
         """Stop current robot motion.
 
         Args:
             release: If True, open the gripper after stopping
+            smooth_stop_duration_s: Time to hold the current pose before finishing
+                the waypoint motion. This gives the controller time to decelerate.
+            smooth_stop_rate_hz: Number of hold waypoints per second during the
+                smooth stop window.
         """
         if self.motion is not None:
+            if (
+                not self.dry_run
+                and smooth_stop_duration_s > 0
+                and smooth_stop_rate_hz > 0
+            ):
+                current_pose = self.motion.current_pose()
+                n_hold_waypoints = max(
+                    1,
+                    int(np.ceil(smooth_stop_duration_s * smooth_stop_rate_hz)),
+                )
+                self.motion.set_next_waypoints(
+                    [Waypoint(affine=current_pose) for _ in range(n_hold_waypoints)]
+                )
+                time.sleep(smooth_stop_duration_s)
             self.motion.finish()
         if release:
             self.open_gripper()
@@ -261,6 +284,7 @@ class PandaPyRobot:
 
         self.pos = self.X_BE[:3, 3]
         self.rot = self.X_BE[:3, :3]
+        self.move_async = None
 
     def get_gripper_state(self) -> float:
         """Get current gripper width.
@@ -348,3 +372,13 @@ class PandaPyRobot:
         starts asynchronous motion execution.
         """
         self.robot.teaching_mode(True)
+
+    def stop_motion(
+        self,
+        release: bool = True,
+        smooth_stop_duration_s: float = SMOOTH_STOP_DURATION_S,
+        smooth_stop_rate_hz: float = SMOOTH_STOP_RATE_HZ,
+    ):
+        """Not implemented"""
+        return
+
