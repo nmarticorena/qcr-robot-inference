@@ -98,7 +98,7 @@ def train(
                     xt = t_shaped * naction + (1 - t_shaped) * noise
                     vector = naction - noise
                     timesteps = (t * args.model.timestep_integer_scaler).long()
-                    pred = nets['noise_pred_net'](
+                    pred = nets["noise_pred_net"](
                         xt, timesteps, global_cond=obs_cond)
                     loss = nn.functional.mse_loss(pred, vector)
 
@@ -127,7 +127,7 @@ def train(
         ema_nets = copy.deepcopy(nets)
         ema.copy_to(ema_nets.parameters())
 
-        # save a checkpoint every 10 epochs
+        # save a checkpoint every 50 epochs
         if (epoch) % args.training_params.save_period == 0:
             torch.save(nets.state_dict(), f"{folder}/net_epoch_{epoch:04d}.pth")
             shutil.copy(f"{folder}/net_epoch_{epoch:04d}.pth", f"{folder}/net_epoch_last.pth")
