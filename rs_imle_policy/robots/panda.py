@@ -366,6 +366,25 @@ class PandaPyRobot:
         )
         return
 
+    def get_next_waypoints(self, translations, orientations, relative: bool = False):
+        """Get the next waypoints for the robot to follow.
+
+        Args:
+            translations: Array of shape (N, 3) containing target positions
+            orientations: Array of shape (N, 4) in quaternion format [w, x, y, z]
+            relative: If True, waypoints are relative to current pose (not yet implemented)
+
+        Returns:
+            List of Waypoint objects corresponding to the input translations and orientations
+        """
+        print(
+            "Waypoints not implemented for pandapy controller yet, this interface is mainly for",
+            "using the teaching mode controller (gravity compensation) for inference using ",
+            "the dry run option. If you want to use the waypoint interface, please use the ",
+            "FrankxRobot controller instead.",
+        )
+        return []
+
     def init_waypoint_motion(self):
         """Initialize waypoint motion controller.
 
