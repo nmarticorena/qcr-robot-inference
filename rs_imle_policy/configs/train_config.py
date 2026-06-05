@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 import pathlib
+from pathlib import Path
 from typing import Literal, Optional
 
 
@@ -281,11 +282,13 @@ class ExperimentConfig:
 @dataclass
 class LoaderConfig:
     """Configuration for data loading"""
-
-    path: pathlib.Path
+    path: Path
     epoch: Optional[int] = None
     timeout: int = 60  # Timeout for experiment in seconds
-    episodes: int = 10  # total number of episodes to run
+    episodes: int = 10  # exclusive max episode id to run
+    initial_id: int = 0  # first episode/experiment id to run
+    evaluation_path: Optional[Path] = None
+    silent_rerun: bool = True  # Whether to open or not the current rerun recording
     exp_name: Optional[str] = None
     dry_run: bool = False
     traj_consistency: bool = False # Only valid for RS-IMLE
