@@ -236,6 +236,6 @@ def get_resnet(name:str, weights=None, input_res = None, **kwargs) -> nn.Module:
     # remove the final fully connected layer
     # for resnet18, the output dim should be 512
     o_shape = output_shape(input_res) 
-    resnet.avgpool = SpatialSoftmax(input_shape = o_shape, num_kp=256)
+    resnet.avgpool = SpatialSoftmax(input_shape = o_shape, num_kp=64)
     resnet.fc = torch.nn.Identity()
     return resnet
