@@ -10,17 +10,10 @@ from panda_py import Panda, libfranka
 
 from rs_imle_policy.utils import transforms
 from rs_imle_policy.robots.base import BaseRobot
+from rs_imle_policy.configs.panda_configs import SinglePandaConfig 
 
 
 # Constants TODO: Decide where is better to have these
-DEFAULT_ROBOT_IP = "172.16.0.2"
-DEFAULT_GRIPPER_SPEED = 0.8
-DEFAULT_GRIPPER_FORCE = 40
-GRIPPER_OPEN_WIDTH = 0.08
-DEFAULT_DYNAMIC_REL = 0.2
-CARTESIAN_IMPEDANCE = [400.0, 400.0, 400.0, 40.0, 40.0, 40.0]
-ACCEL_REL = 0.1
-JERK_REL = 0.01
 SMOOTH_STOP_DURATION_S = 0.5
 SMOOTH_STOP_RATE_HZ = 10
 
@@ -51,8 +44,7 @@ class FrankxRobot(BaseRobot):
 
     def __init__(
         self,
-        ip: str = DEFAULT_ROBOT_IP,
-        dynamic_rel: float = DEFAULT_DYNAMIC_REL,
+        config: SinglePandaConfig,
         dry_run: bool = False,
     ):
         """Initialize the robot controller.
@@ -62,10 +54,13 @@ class FrankxRobot(BaseRobot):
             dynamic_rel: Dynamic scaling factor for robot motion
         """
 
-        self.robot = Robot(ip, dynamic_rel=dynamic_rel, repeat_on_error=True)
-
+        self.config = config
+        self.robot = Robot(config.robot_ip, 
+                           dynamic_rel=config.dynamic_rel, 
+                           repeat_on_error=config.repeat_on_error)
+        
         self.robot.recover_from_errors()
-        self.gripper = Gripper(fci_ip=ip, speed=DEFAULT_GRIPPER_SPEED)
+        self.gripper = Gripper(fci_ip=config.robot_ip, speed=config.gripper_speed)
         self.gripper.open(True)
         self.gripper_state = GripperState.OPEN
 
@@ -89,8 +84,10 @@ class FrankxRobot(BaseRobot):
 
     def initialize_cartesian_impedance(self):
         """Initialize Cartesian impedance control parameters."""
-        self.robot.set_cartesian_impedance(CARTESIAN_IMPEDANCE)
-        self.robot.set_dynamic_rel(DEFAULT_DYNAMIC_REL, accel_rel=ACCEL_REL, jerk_rel=JERK_REL)
+        self.robot.set_cartesian_impedance(self.config.cartesian_impedance)
+        self.robot.set_dynamic_rel(self.config.dynamic_rel,
+                                   accel_rel = self.config.accel_rel,
+                                   jerk_rel = self.config.jerk_rel)
 
     def move_to_start(self, home_config: Optional[NDArray]):
         """Move robot to starting configuration.
@@ -118,8 +115,6 @@ class FrankxRobot(BaseRobot):
     def stop_motion(
         self,
         release: bool = True,
-        smooth_stop_duration_s: float = SMOOTH_STOP_DURATION_S,
-        smooth_stop_rate_hz: float = SMOOTH_STOP_RATE_HZ,
     ):
         """Stop current robot motion.
 
@@ -130,6 +125,8 @@ class FrankxRobot(BaseRobot):
             smooth_stop_rate_hz: Number of hold waypoints per second during the
                 smooth stop window.
         """
+        smooth_stop_duration_s = self.config.stop_duration_s
+        smooth_stop_rate_hz = self.config.stop_rate_hz
         if self.motion is not None:
             if (
                 not self.dry_run
