@@ -60,6 +60,17 @@ default_cameras = {
 
 
 @dataclass
+class ResNetConfig:
+    """ResNet vision encoder configuration"""
+
+    name: str = "resnet18"
+    weights: Optional[str] = None
+    use_spatial_softmax: bool = True
+    num_kp: int = 256
+    feature_dim: int = 512
+
+
+@dataclass
 class VisionConfig:
     """Vision feature configuration"""
 
@@ -67,9 +78,17 @@ class VisionConfig:
     cameras: tuple[str, ...] = ("wrist", "side", "top")
     img_shape: tuple[int, int] = (240, 320)
     center_crop: tuple[int, int] = (216, 288)
+    resnet: ResNetConfig = field(default_factory=ResNetConfig)
 
     def __post_init__(self):
         self.cameras_params: list[CameraConfig] = [default_cameras[cam] for cam in self.cameras]
+        self._sync_vision_features_dim()
+
+    def _sync_vision_features_dim(self):
+        if self.resnet.use_spatial_softmax:
+            self.vision_features_dim = self.resnet.num_kp * 2
+        else:
+            self.vision_features_dim = self.resnet.feature_dim
 
 
 @dataclass
@@ -79,7 +98,7 @@ class G1VisionConfig(VisionConfig):
     cameras: tuple[str, ...] = ("color_0",)
 
     def __post_init__(self):
-        return
+        self._sync_vision_features_dim()
 
 
 @dataclass
@@ -289,6 +308,8 @@ class LoaderConfig:
     episodes: int = 10  # exclusive max episode id to run
     initial_id: int = 0  # first episode/experiment id to run
     evaluation_path: Optional[Path] = None
+    repeat_experiment_id: Optional[int] = None  # experiment id to repeat
+    n_samples: int = 10  # total repeated-evaluation samples to collect
     silent_rerun: bool = True  # Whether to open or not the current rerun recording
     exp_name: Optional[str] = None
     dry_run: bool = False

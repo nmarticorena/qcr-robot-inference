@@ -154,7 +154,19 @@ class Policy:
         """
         cameras = self.config.data.vision.cameras
         input_res = (3, *self.config.data.vision.center_crop)
-        vision_encoders = {f"vision_encoder_{camera}": replace_bn_with_gn(get_resnet("resnet18", input_res = input_res)) for camera in cameras}
+        resnet_config = self.config.data.vision.resnet
+        vision_encoders = {
+            f"vision_encoder_{camera}": replace_bn_with_gn(
+                get_resnet(
+                    resnet_config.name,
+                    weights=resnet_config.weights,
+                    input_res=input_res,
+                    use_spatial_softmax=resnet_config.use_spatial_softmax,
+                    num_kp=resnet_config.num_kp,
+                )
+            )
+            for camera in cameras
+        }
 
         if isinstance(self.config.model, Diffusion):
             noise_pred_net = DiffusionConditionalUnet1D(

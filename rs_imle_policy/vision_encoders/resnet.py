@@ -200,7 +200,7 @@ def replace_bn_with_gn(root_module: nn.Module, features_per_group: int = 16) -> 
     )
     return root_module
 
-def output_shape(input_shape):
+def output_shape(input_shape, feature_dim: int = 512):
     """
     Function to compute output shape from inputs to this module. 
 
@@ -215,15 +215,25 @@ def output_shape(input_shape):
     assert(len(input_shape) == 3)
     out_h = int(math.ceil(input_shape[1] / 32.))
     out_w = int(math.ceil(input_shape[2] / 32.))
-    return [512, out_h, out_w]
+    return [feature_dim, out_h, out_w]
     
-def get_resnet(name:str, weights=None, input_res = None, **kwargs) -> nn.Module:
+def get_resnet(
+    name: str,
+    weights=None,
+    input_res=None,
+    use_spatial_softmax: bool = True,
+    num_kp: int = 256,
+    **kwargs,
+) -> nn.Module:
     """
     Get a ResNet model with the final FC layer removed.
 
     Args:
         name: ResNet architecture name (e.g., 'resnet18', 'resnet34', 'resnet50')
         weights: Pre-trained weights to load (e.g., 'IMAGENET1K_V1'), or None
+        input_res: Input image shape as (C, H, W)
+        use_spatial_softmax: Whether to replace average pooling with SpatialSoftmax
+        num_kp: Number of spatial softmax keypoints
         **kwargs: Additional arguments passed to the ResNet constructor
 
     Returns:
@@ -235,7 +245,10 @@ def get_resnet(name:str, weights=None, input_res = None, **kwargs) -> nn.Module:
 
     # remove the final fully connected layer
     # for resnet18, the output dim should be 512
-    o_shape = output_shape(input_res) 
-    resnet.avgpool = SpatialSoftmax(input_shape = o_shape, num_kp=64)
+    if use_spatial_softmax:
+        if input_res is None:
+            raise ValueError("input_res is required when use_spatial_softmax=True")
+        o_shape = output_shape(input_res, feature_dim=resnet.fc.in_features)
+        resnet.avgpool = SpatialSoftmax(input_shape=o_shape, num_kp=num_kp)
     resnet.fc = torch.nn.Identity()
     return resnet
