@@ -14,7 +14,7 @@ from rs_imle_policy.robots.base import BaseRobot
 
 # Constants TODO: Decide where is better to have these
 DEFAULT_ROBOT_IP = "172.16.0.2"
-DEFAULT_GRIPPER_SPEED = 0.1
+DEFAULT_GRIPPER_SPEED = 0.8
 DEFAULT_GRIPPER_FORCE = 40
 GRIPPER_OPEN_WIDTH = 0.08
 DEFAULT_DYNAMIC_REL = 0.2
