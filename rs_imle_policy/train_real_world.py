@@ -50,7 +50,7 @@ def train(
 
     cams_names = args.data.vision.cameras
 
-    for epoch in range(n_epochs):
+    for epoch in range(n_epochs+1):
         epoch_loss = []
         start_time = time.time()
         with tqdm(dataloader, desc=f"Epoch {epoch + 1}/{n_epochs}", leave=False) as tepoch:
