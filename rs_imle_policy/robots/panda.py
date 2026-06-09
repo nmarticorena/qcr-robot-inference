@@ -13,11 +13,6 @@ from rs_imle_policy.robots.base import BaseRobot
 from rs_imle_policy.configs.panda_configs import SinglePandaConfig 
 
 
-# Constants TODO: Decide where is better to have these
-SMOOTH_STOP_DURATION_S = 0.5
-SMOOTH_STOP_RATE_HZ = 10
-
-
 class GripperState(Enum):
     """Enumeration of gripper states."""
 
@@ -256,8 +251,7 @@ class PandaPyRobot:
 
     def __init__(
         self,
-        ip: str = DEFAULT_ROBOT_IP,
-        dynamic_rel: float = DEFAULT_DYNAMIC_REL,
+        config: SinglePandaConfig,
         dry_run: bool = False,
     ):
         """Initialize the PandaPy robot controller.
@@ -267,11 +261,11 @@ class PandaPyRobot:
             dynamic_rel: Dynamic scaling factor for robot motion
         """
 
-        self.robot = Panda(hostname=ip)
+        self.robot = Panda(hostname=config.robot_ip)
 
         self.robot.get_robot().automatic_error_recovery()
-        self.gripper = libfranka.Gripper(ip)
-        self.gripper.move(GRIPPER_OPEN_WIDTH, DEFAULT_GRIPPER_SPEED)
+        self.gripper = libfranka.Gripper(config.robot_ip)
+        self.gripper.move(config.gripper_open_width, config.gripper_speed)
         self.gripper_state = GripperState.OPEN
 
         self.dry_run = dry_run
@@ -282,6 +276,7 @@ class PandaPyRobot:
         self.pos = self.X_BE[:3, 3]
         self.rot = self.X_BE[:3, :3]
         self.move_async = None
+        self.config = config
 
     def get_gripper_state(self) -> float:
         """Get current gripper width.
@@ -298,7 +293,7 @@ class PandaPyRobot:
             home_config: Joint configuration for home position, or None to skip
         """
         self.robot.teaching_mode(False)
-        self.robot.recover_from_errors()
+        # self.robot.recover_from_errors()
         if home_config is not None:
             self.robot.move_to_joint_position(home_config)
         self.open_gripper()
@@ -306,13 +301,13 @@ class PandaPyRobot:
     def close_gripper(self):
         """Close the gripper if not already closed."""
         if self.gripper_state != GripperState.CLOSED:
-            self.gripper.grasp(0.0, DEFAULT_GRIPPER_SPEED, DEFAULT_GRIPPER_FORCE)
+            self.gripper.grasp(0.0, self.config.gripper_speed, self.config.gripper_force)
             self.gripper_state = GripperState.CLOSED
 
     def open_gripper(self):
         """Open the gripper if not already open."""
         if self.gripper_state != GripperState.OPEN:
-            self.gripper.move(GRIPPER_OPEN_WIDTH, DEFAULT_GRIPPER_SPEED)
+            self.gripper.move(self.config.gripper_open_width, self.config.gripper_speed)
             self.gripper_state = GripperState.OPEN
 
     def get_state(self):
@@ -393,8 +388,6 @@ class PandaPyRobot:
     def stop_motion(
         self,
         release: bool = True,
-        smooth_stop_duration_s: float = SMOOTH_STOP_DURATION_S,
-        smooth_stop_rate_hz: float = SMOOTH_STOP_RATE_HZ,
     ):
         """Not implemented"""
         return
