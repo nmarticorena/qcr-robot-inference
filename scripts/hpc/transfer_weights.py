@@ -16,7 +16,7 @@ class Config:
     remote_root: str = "repos/qcr-robot-inference/saved_weights"
     local_root: Path = Path("saved_weights")
     epochs: tuple[int, ...] = (350, 750)
-    include_last: bool = True
+    include_last: bool = False
 
 
 @dataclass(frozen=True)
