@@ -238,5 +238,4 @@ def get_resnet(name:str, weights=None, input_res = None, **kwargs) -> nn.Module:
     o_shape = output_shape(input_res) 
     resnet.avgpool = SpatialSoftmax(input_shape = o_shape, num_kp=256)
     resnet.fc = torch.nn.Identity()
-    breakpoint()
     return resnet
