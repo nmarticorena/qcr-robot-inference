@@ -114,6 +114,7 @@ inspire_hand_sdk = ">=1.0.0,<2"
 rsync = ">=3.4.1,<4"
 ruff = ">=0.15.14,<0.16"
 ty = ">=0.0.42,<0.0.43"
+seaborn = ">=0.13.2,<0.14"
 
 [pypi-options]
 no-build-isolation = true
