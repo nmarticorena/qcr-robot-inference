@@ -4,10 +4,8 @@ This module provides the Policy class which manages model initialization,
 training setup, and inference for both diffusion-based and RS-IMLE policies.
 """
 
-import copy
 import os
 
-import numpy as np
 import pickle
 import torch
 import torch.nn as nn
@@ -21,9 +19,9 @@ from rs_imle_policy.datasets import BaseDataset
 from rs_imle_policy.network import (
     DiffusionConditionalUnet1D,
     GeneratorConditionalUnet1D,
-    get_resnet,
-    replace_bn_with_gn,
 )
+
+from rs_imle_policy.vision_encoders.resnet import get_resnet, replace_bn_with_gn
 
 
 class Policy:
@@ -47,7 +45,7 @@ class Policy:
         self,
         config: ExperimentConfig,
         training: bool,
-        folder: str = None,
+        folder: str | None = None,
         dataset: BaseDataset | None = None,
     ):
         """Initialize the policy.
@@ -155,7 +153,8 @@ class Policy:
             ModuleDict containing vision encoders and policy network
         """
         cameras = self.config.data.vision.cameras
-        vision_encoders = {f"vision_encoder_{camera}": replace_bn_with_gn(get_resnet("resnet18")) for camera in cameras}
+        input_res = (3, *self.config.data.vision.center_crop)
+        vision_encoders = {f"vision_encoder_{camera}": replace_bn_with_gn(get_resnet("resnet18", input_res = input_res)) for camera in cameras}
 
         if isinstance(self.config.model, Diffusion):
             noise_pred_net = DiffusionConditionalUnet1D(

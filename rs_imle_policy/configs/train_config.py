@@ -66,6 +66,7 @@ class VisionConfig:
     vision_features_dim: int = 512
     cameras: tuple[str, ...] = ("wrist", "side", "top")
     img_shape: tuple[int, int] = (240, 320)
+    center_crop: tuple[int, int] = (216, 288)
 
     def __post_init__(self):
         self.cameras_params: list[CameraConfig] = [default_cameras[cam] for cam in self.cameras]
