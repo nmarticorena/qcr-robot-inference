@@ -252,3 +252,79 @@ def get_resnet(
         resnet.avgpool = SpatialSoftmax(input_shape=o_shape, num_kp=num_kp)
     resnet.fc = torch.nn.Identity()
     return resnet
+
+def keypoint_spread_metrics(
+    kps: torch.Tensor,
+    collapse_threshold: float = 0.05,
+    grid_size: int = 8,
+) -> dict[str, torch.Tensor]:
+    """
+    kps: [B, K, 2], normalized coordinates in [-1, 1]
+
+    Returns metrics that measure how spatially spread/collapsed the keypoints are.
+    """
+
+    if isinstance(kps, tuple):
+        kps = kps[0]
+
+    B, K, _ = kps.shape
+    eps = 1e-8
+
+    # Spread around the mean keypoint location per sample
+    kp_mean = kps.mean(dim=1, keepdim=True)  # [B, 1, 2]
+    centered = kps - kp_mean
+
+    std_xy = kps.std(dim=1)  # [B, 2]
+    std_x = std_xy[:, 0].mean()
+    std_y = std_xy[:, 1].mean()
+    std_mean = std_xy.mean()
+
+    # Distance from image/crop center
+    radius_from_center = torch.linalg.norm(kps, dim=-1)  # [B, K]
+    mean_radius_from_center = radius_from_center.mean()
+
+    # Distance from keypoint cloud center
+    radius_from_kp_mean = torch.linalg.norm(centered, dim=-1)  # [B, K]
+    mean_radius_from_kp_mean = radius_from_kp_mean.mean()
+
+    # Pairwise distances between keypoints
+    dists = torch.cdist(kps, kps)  # [B, K, K]
+
+    # Remove diagonal self-distances
+    eye = torch.eye(K, device=kps.device, dtype=torch.bool).unsqueeze(0)
+    dists_no_diag = dists.masked_fill(eye, float("inf"))
+
+    nearest_neighbor_dist = dists_no_diag.min(dim=-1).values.mean()
+
+    # Mean pairwise distance excluding diagonal
+    valid_dists = dists[~eye.expand_as(dists)]
+    mean_pairwise_dist = valid_dists.mean()
+
+    # Fraction of keypoint pairs closer than threshold
+    close_pairs = valid_dists < collapse_threshold
+    collapse_fraction = close_pairs.float().mean()
+
+    # Grid occupancy: how many spatial bins contain at least one keypoint
+    # Map [-1, 1] -> [0, grid_size - 1]
+    grid_xy = ((kps + 1.0) * 0.5 * grid_size).long()
+    grid_xy = torch.clamp(grid_xy, 0, grid_size - 1)
+
+    occupancies = []
+    for b in range(B):
+        linear_idx = grid_xy[b, :, 1] * grid_size + grid_xy[b, :, 0]
+        occupied = torch.unique(linear_idx).numel()
+        occupancies.append(occupied / float(grid_size * grid_size))
+
+    grid_occupancy = torch.tensor(occupancies, device=kps.device).mean()
+
+    return {
+        "kp/std_x": std_x,
+        "kp/std_y": std_y,
+        "kp/std_mean": std_mean,
+        "kp/mean_radius_from_center": mean_radius_from_center,
+        "kp/mean_radius_from_kp_mean": mean_radius_from_kp_mean,
+        "kp/mean_pairwise_dist": mean_pairwise_dist,
+        "kp/nearest_neighbor_dist": nearest_neighbor_dist,
+        "kp/collapse_fraction": collapse_fraction,
+        "kp/grid_occupancy": grid_occupancy,
+    }

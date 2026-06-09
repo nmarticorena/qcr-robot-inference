@@ -9,6 +9,7 @@ import copy
 import time
 from rs_imle_policy.policy import Policy
 from rs_imle_policy.loss import rs_imle_loss
+from rs_imle_policy.vision_encoders.resnet import keypoint_spread_metrics
 import os
 
 from rs_imle_policy.configs.train_config import ExperimentConfig, Diffusion, RSIMLE, FlowMatching
@@ -22,6 +23,25 @@ def process_image(images, vision_encoder, device):
     image_features = vision_encoder(images)
     image_features = image_features.reshape(B, T, -1)
     return image_features
+
+
+def log_keypoint_metrics(nets, cams_names, train_step: int):
+    metrics = {}
+    for cam in cams_names:
+        encoder = nets[f"vision_encoder_{cam}"]
+        avgpool = getattr(encoder, "avgpool", None)
+        kps = getattr(avgpool, "kps", None)
+        if kps is None:
+            continue
+
+        cam_metrics = keypoint_spread_metrics(kps)
+        metrics.update({f"{cam}/{name}": value for name, value in cam_metrics.items()})
+
+    if metrics:
+        wandb.log(
+            {name: value.item() for name, value in metrics.items()},
+            step=train_step,
+        )
 
 
 def train(
@@ -49,6 +69,12 @@ def train(
     obs_horizon = args.model.obs_horizon
 
     cams_names = args.data.vision.cameras
+    train_step = 0
+    keypoint_metrics_log_interval = args.training_params.keypoint_metrics_log_interval
+    log_keypoint_metrics_enabled = (
+        keypoint_metrics_log_interval > 0
+        and args.data.vision.resnet.use_spatial_softmax
+    )
 
     for epoch in range(n_epochs+1):
         epoch_loss = []
@@ -63,6 +89,8 @@ def train(
                 image_features = [
                     process_image(img, nets[f"vision_encoder_{cam}"], device) for img, cam in zip(images, cams_names)
                 ]
+                if log_keypoint_metrics_enabled and train_step % keypoint_metrics_log_interval == 0:
+                    log_keypoint_metrics(nets, cams_names, train_step)
 
                 obs_features = torch.cat([*image_features, nagent], dim=-1)
                 obs_cond = obs_features.flatten(start_dim=1)
@@ -90,7 +118,7 @@ def train(
                     fake_actions = nets["generator"](noise, global_cond=repeated_obs_cond)
                     fake_actions = fake_actions.reshape(B, args.model.n_samples_per_condition, *naction.shape[1:])
 
-                    loss = rs_imle_loss(naction, fake_actions, args.model.epsilon)
+                    loss = rs_imle_loss(naction, fake_actions, args.model.epsilon, train_step=train_step)
                 elif isinstance(args.model, FlowMatching):
                     noise = torch.randn(naction.shape, device=device)
                     t = torch.rand(B, device=device)
@@ -107,7 +135,7 @@ def train(
 
                 # If loss is 0, skip backprop and log flag in wandb
                 if loss == 0:
-                    wandb.log({"zero_loss": 1})
+                    wandb.log({"zero_loss": 1}, step=train_step)
                 else:
                     loss.backward()
                     if args.model.use_clamping:
@@ -116,13 +144,14 @@ def train(
                     optimizer.zero_grad()
                     lr_scheduler.step()
                     ema.step(nets.parameters())
-                    wandb.log({"zero_loss": 0})
+                    wandb.log({"zero_loss": 0}, step=train_step)
 
-                wandb.log({"loss": loss.item()})
+                wandb.log({"loss": loss.item()}, step=train_step)
 
                 loss_cpu = loss.item()
                 epoch_loss.append(loss_cpu)
                 tepoch.set_postfix(loss=loss_cpu)
+                train_step += 1
 
         ema_nets = copy.deepcopy(nets)
         ema.copy_to(ema_nets.parameters())
@@ -138,13 +167,13 @@ def train(
             )
 
         avg_loss = np.mean(epoch_loss)
-        wandb.log({"avg_train_loss": avg_loss, "epoch": epoch})
+        wandb.log({"avg_train_loss": avg_loss, "epoch": epoch}, step=train_step)
         print(f"Epoch {epoch + 1}/{n_epochs} - Avg. Loss: {avg_loss:.4f} - Time: {time.time() - start_time:.2f}s")
         # If the loss is 0 for a whole epoch, log flag in wandb
         if avg_loss == 0:
-            wandb.log({"zero_loss_epoch": 1})
+            wandb.log({"zero_loss_epoch": 1}, step=train_step)
         else:
-            wandb.log({"zero_loss_epoch": 0})
+            wandb.log({"zero_loss_epoch": 0}, step=train_step)
 
     return
 

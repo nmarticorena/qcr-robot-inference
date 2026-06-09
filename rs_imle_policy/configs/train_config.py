@@ -227,6 +227,7 @@ class OptimConfig:
     eval_interval: int = 10
     num_eval_episodes: int = 1
     save_period: int = 50
+    keypoint_metrics_log_interval: int = 100
 
 
 @dataclass
