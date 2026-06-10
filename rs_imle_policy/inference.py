@@ -1,3 +1,4 @@
+from rs_imle_policy.configs.panda_configs import SinglePandaConfig
 import collections
 import json
 import os
@@ -127,9 +128,9 @@ class RobotInferenceController:
         self.seed(DEFAULT_SEED)
         self.config = config
         if dry_run:
-            self.robot = PandaPyRobot(dry_run=dry_run)
+            self.robot = PandaPyRobot(SinglePandaConfig(),dry_run=dry_run)
         else:
-            self.robot = FrankxRobot(dry_run=dry_run)
+            self.robot = FrankxRobot(SinglePandaConfig(), dry_run=dry_run)
         self.home_q = DEFAULT_HOME_Q if home_q is None else np.asarray(home_q, dtype=float)
         self.robot.move_to_start(self.home_q)
         self.timeout = timeout
