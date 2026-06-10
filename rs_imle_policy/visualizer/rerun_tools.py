@@ -41,12 +41,12 @@ class ReRunRobot:
             rr.TransformAxes3D(axis_length=0.1),
         )
 
-    def log_frame(self, image, camera_name):
+    def log_frame(self, image, camera_name, quality = 50):
         """
         Log a camera frame to rerun
         image: HxWx3 array
         """
-        rr.log(f"{self.name}/{camera_name}", rr.Image(image).compress())
+        rr.log(f"{self.name}/{camera_name}", rr.Image(image).compress(jpeg_quality=quality))
 
     def _apply_alpha(self, vertex_colour: NDArray) -> NDArray:
         if self.alpha is None:
