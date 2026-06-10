@@ -296,22 +296,6 @@ class ExperimentConfig:
         return name
 
 
-@dataclass
-class LoaderConfig:
-    """Configuration for data loading"""
-    path: Path
-    epoch: Optional[int] = None
-    timeout: int = 60  # Timeout for experiment in seconds
-    episodes: int = 10  # exclusive max episode id to run
-    initial_id: int = 0  # first episode/experiment id to run
-    evaluation_path: Optional[Path] = None
-    repeat_experiment_id: Optional[int] = None  # experiment id to repeat
-    n_samples: int = 10  # total repeated-evaluation samples to collect
-    silent_rerun: bool = True  # Whether to open or not the current rerun recording
-    exp_name: Optional[str] = None
-    dry_run: bool = False
-    traj_consistency: bool = False # Only valid for RS-IMLE
-
 
 if __name__ == "__main__":
     import tyro
