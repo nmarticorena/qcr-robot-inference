@@ -93,8 +93,6 @@ class BaseDataset(Dataset, abc.ABC):
 
         if not visualize:
             self.low_dim_obs_shape = self.rlds[0]["state"].shape[1]
-            self.img_shape = vision_config.vision_features_dim * len(vision_config.cameras)
-            self.obs_shape = self.low_dim_obs_shape + self.img_shape
             self.action_shape = self.rlds[0]["action"].shape[1]
 
     def get_relative_transform(self, current_pose: List[NDArray], next_pose: List[NDArray]) -> List[sm.SE3]:

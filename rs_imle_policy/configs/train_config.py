@@ -69,36 +69,30 @@ class ResNetConfig:
     num_kp: int = 256
     feature_dim: int = 512
 
+    def __post_init__(self):
+        if self.use_spatial_softmax:
+            self.feature_dim = self.num_kp * 2
+
+
 
 @dataclass
 class VisionConfig:
     """Vision feature configuration"""
 
-    vision_features_dim: int = 512
     cameras: tuple[str, ...] = ("wrist", "side", "top")
     img_shape: tuple[int, int] = (240, 320)
     center_crop: tuple[int, int] = (216, 288)
-    resnet: ResNetConfig = field(default_factory=ResNetConfig)
 
     def __post_init__(self):
         self.cameras_params: list[CameraConfig] = [default_cameras[cam] for cam in self.cameras]
-        self._sync_vision_features_dim()
 
-    def _sync_vision_features_dim(self):
-        if self.resnet.use_spatial_softmax:
-            self.vision_features_dim = self.resnet.num_kp * 2
-        else:
-            self.vision_features_dim = self.resnet.feature_dim
-
+   
 
 @dataclass
 class G1VisionConfig(VisionConfig):
     """Vision configuration for G1 dataset"""
 
     cameras: tuple[str, ...] = ("color_0",)
-
-    def __post_init__(self):
-        self._sync_vision_features_dim()
 
 
 @dataclass
@@ -240,6 +234,8 @@ class BaseModel:
     action_horizon: int = 8
     obs_horizon: int = 2
     use_clamping: bool = False
+
+    vision_model: Optional[ResNetConfig] = field(default_factory=ResNetConfig)
 
 
 @dataclass

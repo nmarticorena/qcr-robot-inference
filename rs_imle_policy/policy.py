@@ -14,7 +14,7 @@ from diffusers.optimization import get_scheduler
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from diffusers.training_utils import EMAModel
 
-from rs_imle_policy.configs.train_config import Diffusion, ExperimentConfig, RSIMLE, FlowMatching
+from rs_imle_policy.configs.train_config import Diffusion, ExperimentConfig, RSIMLE, FlowMatching, ResNetConfig
 from rs_imle_policy.datasets import BaseDataset
 from rs_imle_policy.network import (
     DiffusionConditionalUnet1D,
@@ -79,7 +79,7 @@ class Policy:
                 persistent_workers=True,
             )
             self.config.action_shape = self.dataset.action_shape
-            self.config.obs_shape = self.dataset.obs_shape
+            self.config.obs_shape = self._obs_shape_from_config()
             self.nets = self.create_networks()
             self.ema = EMAModel(parameters=self.nets.parameters(), power=0.75)
 
@@ -146,6 +146,16 @@ class Policy:
 
         print("Pretrained weights loaded.")
 
+    def _vision_model_config(self) -> ResNetConfig:
+        vision_model = self.config.model.vision_model
+        if vision_model is None:
+            raise ValueError("A vision_model config is required when training with image observations.")
+        return vision_model
+
+    def _obs_shape_from_config(self) -> int:
+        image_features_dim = self._vision_model_config().feature_dim * len(self.config.data.vision.cameras)
+        return self.dataset.low_dim_obs_shape + image_features_dim
+
     def create_networks(self) -> nn.ModuleDict:
         """Create and initialize neural networks for the policy.
 
@@ -154,7 +164,7 @@ class Policy:
         """
         cameras = self.config.data.vision.cameras
         input_res = (3, *self.config.data.vision.center_crop)
-        resnet_config = self.config.data.vision.resnet
+        resnet_config = self._vision_model_config()
         vision_encoders = {
             f"vision_encoder_{camera}": replace_bn_with_gn(
                 get_resnet(
