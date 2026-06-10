@@ -73,7 +73,8 @@ def train(
     keypoint_metrics_log_interval = args.training_params.keypoint_metrics_log_interval
     log_keypoint_metrics_enabled = (
         keypoint_metrics_log_interval > 0
-        and args.data.vision.resnet.use_spatial_softmax
+        and args.model.vision_model is not None
+        and args.model.vision_model.use_spatial_softmax
     )
 
     for epoch in range(n_epochs+1):

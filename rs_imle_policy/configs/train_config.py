@@ -235,7 +235,7 @@ class BaseModel:
     obs_horizon: int = 2
     use_clamping: bool = False
 
-    vision_model: Optional[ResNetConfig] = field(default_factory=ResNetConfig)
+    vision_model: ResNetConfig = field(default_factory=ResNetConfig)
 
 
 @dataclass

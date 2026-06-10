@@ -38,7 +38,7 @@ class RelativeActionsConfig(DataConfig):
 class PickPlaceRSMLEConfig(ExperimentConfig):
     """Pick and place task with RS-IMLE using absolute actions"""
 
-    model: RSIMLE | Diffusion = field(default_factory=RSIMLE)
+    model: RSIMLE = field(default_factory=RSIMLE)
     data: DataConfig = field(default_factory=AbsoluteActionsConfig)
 
 
@@ -46,7 +46,7 @@ class PickPlaceRSMLEConfig(ExperimentConfig):
 class PickPlaceRSMLERelativeConfig(ExperimentConfig):
     """Pick and place task with RS-IMLE using relative actions"""
 
-    model: RSIMLE | Diffusion = field(default_factory=RSIMLE)
+    model: RSIMLE = field(default_factory=RSIMLE)
     data: DataConfig = field(default_factory=RelativeActionsConfig)
 
 
@@ -55,7 +55,7 @@ class PickPlaceRSMLERelativeConfig(ExperimentConfig):
 class PickPlaceDiffusionConfig(ExperimentConfig):
     """Pick and place task with Diffusion using absolute actions"""
 
-    model: RSIMLE | Diffusion = field(default_factory=Diffusion)
+    model: Diffusion = field(default_factory=Diffusion)
     data: DataConfig = field(default_factory=AbsoluteActionsConfig)
 
 
