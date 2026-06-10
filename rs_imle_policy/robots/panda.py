@@ -49,7 +49,7 @@ class FrankxRobot(BaseRobot):
             dynamic_rel: Dynamic scaling factor for robot motion
         """
 
-        self.config = config
+        self.config:SinglePandaConfig = config
         self.robot = Robot(config.robot_ip, 
                            dynamic_rel=config.dynamic_rel, 
                            repeat_on_error=config.repeat_on_error)
@@ -276,7 +276,7 @@ class PandaPyRobot:
         self.pos = self.X_BE[:3, 3]
         self.rot = self.X_BE[:3, :3]
         self.move_async = None
-        self.config = config
+        self.config:SinglePandaConfig = config
 
     def get_gripper_state(self) -> float:
         """Get current gripper width.
