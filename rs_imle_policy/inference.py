@@ -38,11 +38,7 @@ DEFAULT_SEED = 42
 DEFAULT_VIDEO_FPS = 10
 DEFAULT_VIDEO_WIDTH = 640
 DEFAULT_VIDEO_HEIGHT = 480
-DEFAULT_REFRESH_RATE_HZ = 10
-GRIPPER_CLOSE_THRESHOLD = 0.5
-PROGRESS_COMPLETE_THRESHOLD = 0.95
-OBSERVATION_WAIT_TIME_MS = 1
-INFERENCE_TARGET_DT_MULTIPLIER = 4
+OBSERVATION_WAIT_TIME_MS = 100
 REFERENCE_DISPLAY_SIZE = (320, 240)
 REFERENCE_OVERLAY_ALPHA = 0.5
 EVALUATION_WINDOW_NAME = "Evaluation setup"
@@ -776,8 +772,6 @@ class RobotInferenceController:
 
         all_actions = np.zeros((0, self.config.action_shape))
 
-        target_dt = 1.0 / DEFAULT_REFRESH_RATE_HZ * INFERENCE_TARGET_DT_MULTIPLIER
-
         while not self.done:
             while len(self.obs_deque) < self.obs_horizon:
                 time.sleep(OBSERVATION_WAIT_TIME_MS / 1000.0)
@@ -797,9 +791,7 @@ class RobotInferenceController:
 
             self.log_poses(n_trans, r.numpy(), relative=self.config.data.action_relative)
             progress = action[:, -1:]
-            rr.log("/action/gripper", rr.Scalars(action[0, -2].tolist()))
-            rr.log("/action/progress", rr.Scalars(action[0, -1].tolist()))
-
+            
             action_horizon_len = int(len(action))
             relative = self.config.data.action_relative
             waypoints = self.robot.get_next_waypoints(
@@ -808,15 +800,20 @@ class RobotInferenceController:
                 relative=relative,
             )
             for i in range(int(len(action))):
-                if action[i][-2] > GRIPPER_CLOSE_THRESHOLD:
+                if action[i][-2] > self.robot.config.gripper_close_th:
                     self.robot.close_gripper()
                 else:
                     self.robot.open_gripper()
 
-                time.sleep(1 / DEFAULT_REFRESH_RATE_HZ)
+                rr.log("/action/gripper", rr.Scalars(action[i, -2].tolist()))
+                rr.log("/action/progress", rr.Scalars(action[i, -1].tolist()))
+
+
+                time.sleep(1 / self.robot.config.action_hz)
                 self.robot.motion.set_next_waypoints([waypoints[i]])
+                print("progress : ", progress[i])
             
-                if progress[i] >= PROGRESS_COMPLETE_THRESHOLD:
+                if progress[i] >= self.robot.config.progress_complete_th:
                     self.robot.stop_motion()
                     obs_stream.dispose()
                     self.record_videos()
@@ -824,9 +821,6 @@ class RobotInferenceController:
 
             elapsed_time = time.perf_counter() - infer_start_time
             rr.log("/debug/inference_time", rr.Scalars(elapsed_time))
-            # remaining_time = target_dt - elapsed_time
-            # if remaining_time > 0:
-            #     time.sleep(remaining_time)
 
             if (time.time() - start_time) > self.timeout:
                 print("Timeout reached, ending inference.")
