@@ -35,9 +35,9 @@ class SingleRealsense(mp.Process):
         serial_number,
         resolution=(1280, 720),
         depth_resolution=(640, 480),
-        capture_fps=30,
+        capture_fps=10,
         put_fps=None,
-        put_downsample=True,
+        put_downsample= True,
         record_fps=None,
         enable_color=True,
         enable_depth=False,
@@ -534,11 +534,9 @@ class SingleRealsense(mp.Process):
                         allow_negative=True,
                     )
 
-                    for step_idx in global_idxs:
-                        put_data["step_idx"] = step_idx
-                        # put_data['timestamp'] = put_start_time + step_idx / self.put_fps
+                    if global_idxs:
+                        put_data["step_idx"] = global_idxs[-1]
                         put_data["timestamp"] = receive_time
-                        # print(step_idx, data['timestamp'])
                         try:
                             self.ring_buffer.put(put_data, wait=False)
                         except TimeoutError as e:
@@ -616,7 +614,6 @@ class SingleRealsense(mp.Process):
                                     f"[SingleRealsense {self.serial_number}] Failed to set option {option} to {value}: {e}"
                                 )
                                 print("Retrying after 0.1s...")
-                                time.sleep(0.1)
 
                         # print('auto', sensor.get_option(rs.option.enable_auto_exposure))
                         # print('exposure', sensor.get_option(rs.option.exposure))
