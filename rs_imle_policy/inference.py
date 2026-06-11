@@ -34,7 +34,6 @@ from rs_imle_policy.robots import FrankxRobot, PandaPyRobot
 from rs_imle_policy.visualizer.rerun_tools import ReRunRobot
 
 # Constants
-DEFAULT_SEED = 42
 DEFAULT_VIDEO_FPS = 10
 DEFAULT_VIDEO_WIDTH = 640
 DEFAULT_VIDEO_HEIGHT = 480
@@ -102,7 +101,7 @@ class RobotInferenceController:
 
     Attributes:
         config: Experiment configuration
-        eval_name: Name of the evaluation run
+        media_dir: Directory for evaluation results and recordings
         timeout: Maximum time (seconds) for an episode
         dry_run: Flag for dry run mode
         robot: Frankx robot controller
@@ -115,24 +114,32 @@ class RobotInferenceController:
     def __init__(
         self,
         config: ExperimentConfig,
-        eval_name: str,
-        timeout: int,
-        dry_run: bool = False,
+        eval_details: SinglePandaEvaluationConfig,
+        media_dir: Optional[Path] = None,
         home_q: Optional[NDArray] = None,
-        folder: Path = None,
+        folder: Optional[Path] = None,
     ):
+        if isinstance(config.model, RSIMLE):
+            config.model.traj_consistency = eval_details.traj_consistency
         self.infer_idx = 0
-        self.folder = folder
+        self.folder = folder if folder is not None else eval_details.path
+        self.media_dir = (
+            Path("saved_evaluation_media") / config.task_name / eval_details.run_name
+            if media_dir is None
+            else media_dir
+        )
+        self.media_dir.mkdir(parents=True, exist_ok=True)
         self.last_called_obs = time.time()
-        self.seed(DEFAULT_SEED)
+        self.seed(eval_details.seed)
         self.config = config
-        if dry_run:
-            self.robot = PandaPyRobot(SinglePandaConfig(),dry_run=dry_run)
+
+        if eval_details.dry_run:
+            self.robot = PandaPyRobot(eval_details.robot_config, dry_run=True)
         else:
-            self.robot = FrankxRobot(SinglePandaConfig(), dry_run=dry_run)
+            self.robot = FrankxRobot(eval_details.robot_config, dry_run=False)
         self.home_q = DEFAULT_HOME_Q if home_q is None else np.asarray(home_q, dtype=float)
         self.robot.move_to_start(self.home_q)
-        self.timeout = timeout
+        self.timeout = eval_details.timeout
 
         rtb_panda = rtb.models.Panda()
         self.gui = ReRunRobot(rtb_panda, "panda")
@@ -141,13 +148,11 @@ class RobotInferenceController:
         self.perception_system.start()
         self.setup_diffusion_policy()
 
-        self.eval_name = eval_name
+        self.video_output_dir = self.media_dir
+        self.video_filename_prefix = ""
         self.all_frames = defaultdict(list)
         self.done = False
         self.idx = 0
-
-        # create folder to save images
-        os.makedirs(f"saved_evaluation_media/{self.eval_name}", exist_ok=True)
 
     def seed(self, seed: int):
         """Set random seeds for reproducibility.
@@ -190,25 +195,43 @@ class RobotInferenceController:
         nagent_pos_np = normalize_data(agent_pos_np, stats=self.policy.stats["state"])
         nagent_pos = torch.from_numpy(nagent_pos_np).to(device, dtype=dtype)
 
-        # if isinstance(self.config.model, Diffusion):
         encoders = self.policy.nets
-        # elif isinstance(self.config.model, RSIMLE):
-            # encoders = self.policy.nets
-        # else:
-            # raise NotImplementedError("Model not supported for inference.")
 
         image_features = []
         with torch.no_grad():
             for cam_name in cams:
                 image = np.stack([x[cam_name] for x in obs_deque])
                 input_image = torch.stack([self.policy.transform(img) for img in image])
-                feat = encoders[f"vision_encoder_{cam_name}"](input_image.to(device, dtype))
+                encoder = encoders[f"vision_encoder_{cam_name}"]
+                feat = encoder(input_image.to(device, dtype))
+                self._log_spatialsoftmax_keypoints(cam_name, image[-1], encoder)
                 image_features.append(feat)
 
         obs_features = torch.cat(image_features + [nagent_pos], dim=-1)
         obs_cond = obs_features.unsqueeze(0).flatten(start_dim=1)
 
         return obs_cond
+
+    def _log_spatialsoftmax_keypoints(self, cam_name: str, image: np.ndarray, encoder: torch.nn.Module) -> None:
+        avgpool = getattr(encoder, "avgpool", None)
+        kps = getattr(avgpool, "kps", None)
+        if kps is None:
+            return
+        if isinstance(kps, tuple):
+            kps = kps[0]
+
+        kps = kps[-1].detach().float().cpu().numpy()
+        h, w = image.shape[:2]
+        crop_h, crop_w = self.config.data.vision.center_crop
+        resized_h, resized_w = self.config.data.vision.img_shape
+        offset_x = (resized_w - crop_w) / 2.0
+        offset_y = (resized_h - crop_h) / 2.0
+
+        xy = np.empty_like(kps, dtype=np.float32)
+        xy[:, 0] = (offset_x + (kps[:, 0] + 1.0) * 0.5 * (crop_w - 1)) / (resized_w - 1) * (w - 1)
+        xy[:, 1] = (offset_y + (kps[:, 1] + 1.0) * 0.5 * (crop_h - 1)) / (resized_h - 1) * (h - 1)
+        rr.log(f"{self.gui.name}/{cam_name}_inference/spatialsoftmax_kps", rr.Points2D(xy, radii=3))
+        self.gui.log_frame(image, cam_name + "_inference", quality = 80)
 
     def get_observation(self):
         """Capture current robot state and camera frames.
@@ -237,9 +260,9 @@ class RobotInferenceController:
     def record_videos(self):
         """Save recorded camera frames as video files."""
         for cam_name in self.config.data.vision.cameras:
-            save_path = f"saved_evaluation_media/{self.eval_name}/{self.idx}_{cam_name}.mp4"
+            save_path = self.video_output_dir / f"{self.video_filename_prefix}{cam_name}.mp4"
             out = cv2.VideoWriter(
-                save_path,
+                str(save_path),
                 cv2.VideoWriter_fourcc(*"mp4v"),  # type: ignore[attr-defined]
                 DEFAULT_VIDEO_FPS,
                 (DEFAULT_VIDEO_WIDTH, DEFAULT_VIDEO_HEIGHT),
@@ -248,6 +271,18 @@ class RobotInferenceController:
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 out.write(rgb_frame)
             out.release()
+
+    def _set_video_output(self, run_id: int, attempt_index: Optional[int] = None) -> int:
+        if attempt_index is None:
+            attempt_index = self._next_attempt_index(run_id)
+
+        self.video_output_dir = self._experiment_media_dir(run_id) / f"{attempt_index:04d}"
+        self.video_output_dir.mkdir(parents=True, exist_ok=True)
+        self.video_filename_prefix = ""
+        return attempt_index
+
+    def _experiment_media_dir(self, experiment_index: int) -> Path:
+        return self.media_dir / f"episode_{experiment_index}"
 
     def infer_action(self, obs_deque):
         """Infer action from observations using the policy model.
@@ -495,6 +530,7 @@ class RobotInferenceController:
         total_episodes = episodes - initial_id
         for i, episode_id in enumerate(episode_ids):
             self.idx = episode_id
+            attempt_index = self._set_video_output(episode_id)
             print(f"Starting episode {i + 1}/{total_episodes} (id {self.idx})")
             self.done = False
             time.sleep(0.1)
@@ -502,7 +538,17 @@ class RobotInferenceController:
 
             input("Press Enter to start the next episode...")
             self.obs_deque.clear()
-            self.inference_loop()
+            episode_log = self.inference_loop()
+            self._save_attempt_result(
+                {
+                    "episode": episode_id,
+                    "episode_id": episode_id,
+                    "attempt_index": attempt_index,
+                    "timestamp": time.time(),
+                    "media_relative_path": self.video_output_dir.relative_to(self.media_dir).as_posix(),
+                    **episode_log,
+                }
+            )
             self.all_frames = defaultdict(list)
             print(f"Finished episode {i + 1}/{total_episodes} (id {self.idx})")
 
@@ -574,8 +620,7 @@ class RobotInferenceController:
         self,
         live_frames: dict[str, np.ndarray],
         reference_frames: dict[str, np.ndarray],
-        episode_idx: int,
-        episodes: int,
+        run_label: str,
     ) -> np.ndarray:
         overlay_tiles = []
         for camera_name in self.config.data.vision.cameras:
@@ -586,10 +631,7 @@ class RobotInferenceController:
         overlay_row = np.hstack(overlay_tiles)
 
         footer = np.zeros((44, overlay_row.shape[1], 3), dtype=np.uint8)
-        text = (
-            f"Align scene to target. enter/space: start  q/esc: abort  "
-            f"episode {episode_idx + 1}/{episodes}"
-        )
+        text = f"Align scene to target. enter/space: start  q/esc: abort  {run_label}"
         cv2.putText(
             footer,
             text,
@@ -609,7 +651,7 @@ class RobotInferenceController:
             ]
         )
 
-    def wait_for_experiment_setup(self, experiment: dict, episode_idx: int, episodes: int) -> None:
+    def wait_for_experiment_setup(self, experiment: dict, run_label: str) -> None:
         reference_frames = self._load_reference_frames(experiment)
         cv2.namedWindow(EVALUATION_WINDOW_NAME, cv2.WINDOW_FULLSCREEN)
         cv2.resizeWindow(EVALUATION_WINDOW_NAME, 1280, 720)
@@ -624,8 +666,7 @@ class RobotInferenceController:
                 self._make_reference_display(
                     live_frames,
                     reference_frames,
-                    episode_idx,
-                    episodes,
+                    run_label,
                 ),
             )
             key = cv2.waitKey(1) & 0xFF
@@ -636,60 +677,79 @@ class RobotInferenceController:
         cv2.destroyWindow(EVALUATION_WINDOW_NAME)
 
     @staticmethod
-    def _prompt_experiment_success(episode_idx: int, episodes: int) -> bool:
+    def _prompt_experiment_success(run_label: str) -> bool:
         while True:
-            response = input(
-                f"Did episode {episode_idx + 1}/{episodes} succeed? [y/n]: "
-            ).strip().lower()
+            response = input(f"Did {run_label} succeed? [y/n]: ").strip().lower()
             if response in ("y", "yes"):
                 return True
             if response in ("n", "no"):
                 return False
             print("Please enter y or n.")
 
-    def _evaluation_results_path(self) -> Path:
-        return Path(f"saved_evaluation_media/{self.eval_name}/evaluation_results.json")
+    def _save_attempt_result(self, result: dict) -> None:
+        with (self.video_output_dir / "result.json").open("w") as f:
+            json.dump(result, f, indent=2)
 
-    def _load_evaluation_results(self) -> list[dict]:
-        results_path = self._evaluation_results_path()
-        if not results_path.exists():
-            return []
+    def _run_evaluation_attempt(
+        self,
+        experiment: dict,
+        run_label: str,
+        episode_index: int,
+        attempt_index: Optional[int] = None,
+    ) -> dict:
+        self.idx = self._evaluation_experiment_index(experiment, episode_index)
+        attempt_index = self._set_video_output(self.idx, attempt_index)
+        print(f"Starting {run_label}")
+        self.done = False
+        time.sleep(0.1)
+        self.robot.move_to_start(self.home_q)
+        self.wait_for_experiment_setup(experiment, run_label)
+        self.obs_deque.clear()
 
-        with results_path.open("r") as f:
-            results = json.load(f)
-        if not isinstance(results, list):
-            raise ValueError(f"Evaluation results must be a list: {results_path}")
-        return results
+        try:
+            episode_log = self.inference_loop()
+            succeeded = self._prompt_experiment_success(run_label)
+            result = {
+                "episode": episode_index,
+                "episode_id": self.idx,
+                "experiment_index": self.idx,
+                "attempt_index": attempt_index,
+                "success": succeeded,
+                "timestamp": time.time(),
+                "media_relative_path": self.video_output_dir.relative_to(self.media_dir).as_posix(),
+                **episode_log,
+            }
+            print(f"Finished {run_label}")
+            return result
+        finally:
+            self.all_frames = defaultdict(list)
 
-    def _save_evaluation_results(self, results: list[dict]) -> None:
-        results_path = self._evaluation_results_path()
-        with results_path.open("w") as f:
-            json.dump(results, f, indent=2)
+    def _next_attempt_index(self, experiment_index: int) -> int:
+        attempt_indices = []
+        experiment_dir = self._experiment_media_dir(experiment_index)
+        if experiment_dir.exists():
+            attempt_indices = [
+                int(attempt_dir.name)
+                for attempt_dir in experiment_dir.iterdir()
+                if attempt_dir.is_dir() and attempt_dir.name.isdigit()
+            ]
+        return max(attempt_indices, default=-1) + 1
+
+    def _completed_attempt_indices(self, experiment_index: int) -> set[int]:
+        experiment_dir = self._experiment_media_dir(experiment_index)
+        if not experiment_dir.exists():
+            return set()
+        return {
+            int(attempt_dir.name)
+            for attempt_dir in experiment_dir.iterdir()
+            if attempt_dir.is_dir()
+            and attempt_dir.name.isdigit()
+            and (attempt_dir / "result.json").exists()
+        }
 
     @staticmethod
-    def _evaluation_result_ids(results: list[dict]) -> set[int]:
-        result_ids = set()
-        for result in results:
-            if "experiment_index" not in result:
-                continue
-            result_ids.add(int(result["experiment_index"]))
-        return result_ids
-
-    @staticmethod
-    def _confirm_duplicate_evaluation_results(
-        duplicate_ids: list[int],
-        results_path: Path,
-    ) -> None:
-        while True:
-            response = input(
-                f"Evaluation results already contain ids {duplicate_ids} in "
-                f"{results_path}. Append duplicate results? [y/N]: "
-            ).strip().lower()
-            if response in ("y", "yes"):
-                return
-            if response in ("", "n", "no"):
-                raise RuntimeError("Evaluation aborted to avoid duplicate result ids.")
-            print("Please enter y or n.")
+    def _evaluation_experiment_index(experiment: dict, fallback_index: int) -> int:
+        return int(experiment.get("index", fallback_index))
 
     @staticmethod
     def _serialize_action_outputs(actions: np.ndarray) -> dict:
@@ -722,40 +782,37 @@ class RobotInferenceController:
     def run_evaluation_experiments(self, experiments: list[dict]):
         """Run evaluation episodes guided by a saved experiment manifest."""
         episodes = len(experiments)
-        results = self._load_evaluation_results()
-        existing_result_ids = self._evaluation_result_ids(results)
-        requested_ids = [
-            int(experiment.get("index", i))
-            for i, experiment in enumerate(experiments)
-        ]
-        duplicate_ids = sorted(set(requested_ids) & existing_result_ids)
-        if duplicate_ids:
-            self._confirm_duplicate_evaluation_results(
-                duplicate_ids,
-                self._evaluation_results_path(),
-            )
-
         for i, experiment in enumerate(experiments):
-            self.idx = int(experiment.get("index", i))
-            print(f"Starting episode {i + 1}/{episodes}")
-            self.done = False
-            time.sleep(0.1)
-            self.robot.move_to_start(self.home_q)
-            self.wait_for_experiment_setup(experiment, i, episodes)
-            self.obs_deque.clear()
-            episode_log = self.inference_loop()
-            succeeded = self._prompt_experiment_success(i, episodes)
-            results.append(
-                {
-                    "episode": i,
-                    "experiment_index": self.idx,
-                    "success": succeeded,
-                    **episode_log,
-                }
+            experiment_index = self._evaluation_experiment_index(experiment, i)
+            result = self._run_evaluation_attempt(
+                experiment,
+                f"episode {i + 1}/{episodes} (experiment id {experiment_index})",
+                episode_index=i,
             )
-            self._save_evaluation_results(results)
-            self.all_frames = defaultdict(list)
-            print(f"Finished episode {i + 1}/{episodes}")
+            self._save_attempt_result(result)
+
+    def run_evaluation_until_n_samples(self, experiment: dict, n_samples: int) -> None:
+        """Repeat one saved evaluation experiment until n_samples are collected."""
+        if n_samples <= 0:
+            raise ValueError(f"n_samples must be positive, got {n_samples}.")
+
+        experiment_index = self._evaluation_experiment_index(experiment, 0)
+        completed_attempt_indices = self._completed_attempt_indices(experiment_index)
+
+        while len(completed_attempt_indices) < n_samples:
+            attempt_index = self._next_attempt_index(experiment_index)
+            sample_number = len(completed_attempt_indices) + 1
+            result = self._run_evaluation_attempt(
+                experiment,
+                (
+                    f"experiment id {experiment_index}, sample {sample_number}/{n_samples} "
+                    f"(attempt {attempt_index + 1})"
+                ),
+                episode_index=attempt_index,
+                attempt_index=attempt_index,
+            )
+            self._save_attempt_result(result)
+            completed_attempt_indices.add(attempt_index)
 
     def inference_loop(self):
         """Main inference loop for executing robot policy."""
