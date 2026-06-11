@@ -137,7 +137,8 @@ class RobotInferenceController:
             self.robot = PandaPyRobot(eval_details.robot_config, dry_run=True)
         else:
             self.robot = FrankxRobot(eval_details.robot_config, dry_run=False)
-        self.home_q = DEFAULT_HOME_Q if home_q is None else np.asarray(home_q, dtype=float)
+        self.home_q =  eval_details.robot_config.default_q if home_q is None else np.asarray(home_q, dtype=float)
+        self.home_q = np.array(self.home_q, dtype=float)
         self.robot.move_to_start(self.home_q)
         self.timeout = eval_details.timeout
 
@@ -535,6 +536,10 @@ class RobotInferenceController:
             self.done = False
             time.sleep(0.1)
             self.robot.move_to_start(self.home_q)
+            while not self.robot.check_home(self.home_q):
+                time.sleep(1)
+                print("Retrying to move to start...")
+                self.robot.move_to_start(self.home_q)
 
             input("Press Enter to start the next episode...")
             self.obs_deque.clear()
