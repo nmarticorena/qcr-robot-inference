@@ -880,6 +880,7 @@ class RobotInferenceController:
                     obs_stream.dispose()
                     self.record_videos()
                     self.done = True
+                    break
 
             elapsed_time = time.perf_counter() - infer_start_time
             rr.log("/debug/inference_time", rr.Scalars(elapsed_time))
