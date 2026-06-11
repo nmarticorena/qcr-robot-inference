@@ -11,6 +11,7 @@ from rs_imle_policy.configs.panda_configs import SinglePandaConfig
 class DefaultEvaluationConfig:
     """Configuration for evaluation config"""
     path: Path
+    seed: int = 42
     epoch: Optional[int|str] = None
     timeout: int = 60  # Timeout for experiment in seconds
     episodes: int = 10  # exclusive max episode id to run
@@ -21,7 +22,7 @@ class DefaultEvaluationConfig:
     silent_rerun: bool = True  # Whether to open or not the current rerun recording
     exp_name: Optional[str] = None
     dry_run: bool = False
-    traj_consistency: bool = False # Only valid for RS-IMLE
+    traj_consistency: bool = True # Only valid for RS-IMLE
     weight_path: Path = field(init=False)
 
     def __post_init__(self):
@@ -29,9 +30,9 @@ class DefaultEvaluationConfig:
             self.exp_name = ask_run_name(self.path.name)
         if isinstance(self.epoch, int):
             self.epoch = str(self.epoch).zfill(4)
+        self.run_name: str = sanitize_run_name(self.exp_name, self.epoch)
         if self.epoch is None:
             self.epoch = "last"
-        self.run_name:str = sanitize_run_name(self.exp_name, self.epoch)
         self.weight_path = self.path / f"ema_net_epoch_{self.epoch}.pth"
 
         self.check()
@@ -42,7 +43,7 @@ class DefaultEvaluationConfig:
 
 @dataclass
 class SinglePandaEvaluationConfig(DefaultEvaluationConfig):
-    robot_config:SinglePandaConfig = field(default_factory = SinglePandaConfig)
+    robot_config: SinglePandaConfig = field(default_factory=SinglePandaConfig)
 
 def ask_run_name(default:str) -> str:
     exp_name = inquirer.text(
@@ -51,7 +52,7 @@ def ask_run_name(default:str) -> str:
     ).execute()
     return exp_name
 
-def sanitize_run_name(name: str, epoch: int | None | str) -> str:
+def sanitize_run_name(name: str, epoch: int | None | str = None) -> str:
     run_name = re.sub(r"\s+", "_", name.strip())
     run_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", run_name)
     run_name = run_name.strip("._-")
