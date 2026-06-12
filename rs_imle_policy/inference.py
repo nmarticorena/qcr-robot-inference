@@ -205,6 +205,8 @@ class RobotInferenceController:
                 input_image = torch.stack([self.policy.transform(img) for img in image])
                 encoder = encoders[f"vision_encoder_{cam_name}"]
                 feat = encoder(input_image.to(device, dtype))
+                self.gui.log_frame(image[-1], cam_name + "_inference", quality = 80)
+                self.gui.log_frame(image[-2], cam_name + "_inference_prev", quality = 80)
                 self._log_spatialsoftmax_keypoints(cam_name, image[-1], encoder)
                 image_features.append(feat)
 
@@ -232,7 +234,6 @@ class RobotInferenceController:
         xy[:, 0] = (offset_x + (kps[:, 0] + 1.0) * 0.5 * (crop_w - 1)) / (resized_w - 1) * (w - 1)
         xy[:, 1] = (offset_y + (kps[:, 1] + 1.0) * 0.5 * (crop_h - 1)) / (resized_h - 1) * (h - 1)
         rr.log(f"{self.gui.name}/{cam_name}_inference/spatialsoftmax_kps", rr.Points2D(xy, radii=3))
-        self.gui.log_frame(image, cam_name + "_inference", quality = 80)
 
     def get_observation(self):
         """Capture current robot state and camera frames.
