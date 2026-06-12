@@ -179,6 +179,13 @@ class RobotInferenceController:
             self.prev_traj_pos: Optional[NDArray] = None
             self.prev_traj_rot: Optional[NDArray] = None
 
+    def get_action_mode(self) -> str:
+        """Return the configured action convention."""
+        action_mode = getattr(self.config.data, "action_mode", None)
+        if action_mode in ("absolute", "delta", "relative"):
+            return action_mode
+        return "delta" if self.config.data.action_relative else "absolute"
+
     def process_inference_vision(self, obs_deque):
         """Process visual observations through encoders.
 
@@ -327,9 +334,13 @@ class RobotInferenceController:
                     trans = debug_denoising[:, :3]
                     rot_6d = debug_denoising[:, 3:9]
                     rot_mat3x3 = transform_utils.rotation_6d_to_matrix(torch.from_numpy(rot_6d)).numpy()
-                    if self.config.data.action_relative:
+                    action_mode = self.get_action_mode()
+                    if action_mode == "delta":
                         p0, r0 = self.robot.pos, self.robot.rot
-                        trans, rot_mat3x3 = self.transform_action_to_absolute(trans, rot_mat3x3, p0, r0)
+                        trans, rot_mat3x3 = self.delta_action_to_absolute(trans, rot_mat3x3, p0, r0)
+                    elif action_mode == "relative":
+                        p0, r0 = self.robot.pos, self.robot.rot
+                        trans, rot_mat3x3 = self.relative_action_to_absolute(trans, rot_mat3x3, p0, r0)
 
                     for i in range(trans.shape[0]):
                         rr.log(
@@ -439,18 +450,21 @@ class RobotInferenceController:
 
         return {"action": action}
 
-    def log_poses(self, trans: NDArray, rots: NDArray, relative: bool = False):
+    def log_poses(self, trans: NDArray, rots: NDArray, action_mode: str = "absolute"):
         """
         Log action poses to rerun
         Args:
             trans (NDArray): Nx3 array of translations
             rots (NDArray): Nx3x3 array of rotation matrices
-            relative (bool): whether the poses are relative to each other
+            action_mode: action convention, one of absolute, delta, or relative
         """
         n_actions = len(trans)
-        if relative:
+        if action_mode == "delta":
             p0, r0 = self.robot.pos, self.robot.rot
-            trans, rots = self.transform_action_to_absolute(trans, rots, p0, r0)
+            trans, rots = self.delta_action_to_absolute(trans, rots, p0, r0)
+        elif action_mode == "relative":
+            p0, r0 = self.robot.pos, self.robot.rot
+            trans, rots = self.relative_action_to_absolute(trans, rots, p0, r0)
         for i in range(n_actions):
             rr.log(
                 f"/action/pose_{i}/transform",
@@ -471,13 +485,17 @@ class RobotInferenceController:
     ) -> torch.Tensor:
         actions = unnormalize_data(nactions.detach().cpu().numpy(), stats=self.policy.stats["action"])
 
-        if self.config.data.action_relative:
+        action_mode = self.get_action_mode()
+        if action_mode in ("delta", "relative"):
             absolute_actions = actions.copy()
             for batch_idx in range(actions.shape[0]):
                 trans = actions[batch_idx, :, :3]
                 rot_6d = actions[batch_idx, :, 3:9]
                 rot_mats = transform_utils.rotation_6d_to_matrix(torch.from_numpy(rot_6d)).numpy()
-                trans, rot_mats = self.transform_action_to_absolute(trans, rot_mats, pos, rot)
+                if action_mode == "delta":
+                    trans, rot_mats = self.delta_action_to_absolute(trans, rot_mats, pos, rot)
+                else:
+                    trans, rot_mats = self.relative_action_to_absolute(trans, rot_mats, pos, rot)
                 absolute_actions[batch_idx, :, :3] = trans
                 absolute_actions[batch_idx, :, 3:9] = transform_utils.matrix_to_rotation_6d(rot_mats).numpy()
             actions = absolute_actions
@@ -485,14 +503,14 @@ class RobotInferenceController:
         return torch.from_numpy(actions).to(self.policy.device, dtype=self.policy.precision)
 
     @staticmethod
-    def transform_action_to_absolute(
+    def delta_action_to_absolute(
         trans: NDArray,
         rots: NDArray,
         p0: Optional[NDArray] = None,
         r0: Optional[NDArray] = None,
     ) -> tuple[NDArray, NDArray]:
         """
-        Transform relative actions to absolute actions
+        Transform consecutive delta actions to absolute actions.
         Args:
             trans (NDArray): Nx3 array of translations
             rots (NDArray): Nx3x3 array of rotation matrices
@@ -512,6 +530,26 @@ class RobotInferenceController:
             current_rot = rotations[i]
             current_pos = translations[i]
         return translations, rotations
+
+    @staticmethod
+    def relative_action_to_absolute(
+        trans: NDArray,
+        rots: NDArray,
+        p0: Optional[NDArray] = None,
+        r0: Optional[NDArray] = None,
+    ) -> tuple[NDArray, NDArray]:
+        """
+        Transform anchor-relative actions to absolute actions.
+
+        Every action is expressed with respect to the same anchor pose.
+        """
+        current_rot = np.eye(3) if r0 is None else r0
+        current_pos = np.zeros(3) if p0 is None else p0
+        rotations = current_rot @ rots
+        translations = current_pos + np.einsum("ij,nj->ni", current_rot, trans)
+        return translations, rotations
+
+    transform_action_to_absolute = delta_action_to_absolute
 
     def run_experiments(self, episodes: int, initial_id: int = 0):
         """Run multiple evaluation episodes.
@@ -854,15 +892,28 @@ class RobotInferenceController:
 
             r = transform_utils.rotation_6d_to_matrix(action[:, 3:9])
 
-            self.log_poses(n_trans, r.numpy(), relative=self.config.data.action_relative)
+            action_mode = self.get_action_mode()
+            rotation_mats = r.numpy()
+            self.log_poses(np.asarray(n_trans), rotation_mats, action_mode=action_mode)
             progress = action[:, -1:]
             
             action_horizon_len = int(len(action))
-            relative = self.config.data.action_relative
+            waypoint_trans = n_trans
+            waypoint_quads = n_quads
+            waypoint_relative = action_mode == "delta"
+            if action_mode == "relative":
+                waypoint_trans, waypoint_rots = self.relative_action_to_absolute(
+                    np.asarray(n_trans),
+                    rotation_mats,
+                    self.robot.pos,
+                    self.robot.rot,
+                )
+                waypoint_quads = transform_utils.matrix_to_quaternion(torch.from_numpy(waypoint_rots)).numpy()
+                waypoint_relative = False
             waypoints = self.robot.get_next_waypoints(
-                n_trans[0:action_horizon_len],
-                n_quads[0:action_horizon_len],
-                relative=relative,
+                waypoint_trans[0:action_horizon_len],
+                waypoint_quads[0:action_horizon_len],
+                relative=waypoint_relative,
             )
             for i in range(int(len(action))):
                 if action[i][-2] > self.robot.config.gripper_close_th:

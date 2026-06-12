@@ -198,6 +198,7 @@ def main():
         action_keys=args.data.action_keys,
         vision_config=args.data.vision,
         use_next_state=args.data.use_next_state,
+        action_mode=args.data.action_mode,
     )
     if args.debug:
         dataloader = torch.utils.data.DataLoader(
