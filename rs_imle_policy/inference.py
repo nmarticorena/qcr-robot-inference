@@ -845,6 +845,8 @@ class RobotInferenceController:
             out = self.infer_action(obs)
             action = out["action"]
             all_actions = np.concatenate([all_actions, action], axis=0)
+            inference_time = time.perf_counter() - infer_start_time
+            rr.log("/debug/inference_time", rr.Scalars(inference_time))
 
             print("elapsed time: ", time.time() - start_time)
 
@@ -883,8 +885,7 @@ class RobotInferenceController:
                     self.done = True
                     break
 
-            elapsed_time = time.perf_counter() - infer_start_time
-            rr.log("/debug/inference_time", rr.Scalars(elapsed_time))
+            
 
             if (time.time() - start_time) > self.timeout:
                 print("Timeout reached, ending inference.")
