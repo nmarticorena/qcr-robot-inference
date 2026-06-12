@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import tyro
 from InquirerPy import inquirer
@@ -15,7 +16,7 @@ class Config:
     remote: str = "hpc"
     remote_root: str = "repos/qcr-robot-inference/saved_weights"
     local_root: Path = Path("saved_weights")
-    epochs: tuple[int, ...] = (350, 750)
+    epochs: Optional[tuple[int, ...]] = None
     include_last: bool = False
 
 
@@ -111,6 +112,47 @@ def list_remote_experiments(config: Config) -> list[RemoteExperiment]:
 
     return sorted(experiments, key=lambda exp: exp.modified_timestamp, reverse=True)
 
+def get_available_epochs(config: Config, choices: list[RemoteExperiment]) -> None:
+    def check_cmd(exp: RemoteExperiment) -> list[str]:
+        cmd = [
+            "ssh",
+            config.remote,
+            (
+                f"ls {config.remote_root}/{exp.group}/{exp.name}/ema_net_epoch_*.pth"
+            ),
+        ]
+        return cmd
+    
+    def get_epochs(remote_experiment: RemoteExperiment) -> list[int]:
+        output = run(check_cmd(remote_experiment), capture=True)
+        files = output.splitlines()
+        epochs = []
+        for file in files:
+            filename = file.strip().split("/")[-1]
+            if filename.startswith("ema_net_epoch_") and filename.endswith(".pth"):
+                epoch_str = filename[len("ema_net_epoch_"):-len(".pth")]
+                if epoch_str.isdigit():
+                    epochs.append(int(epoch_str))
+        return epochs
+
+    ephocs = [set(get_epochs(exp)) for exp in choices]
+    common_epochs = set.intersection(*ephocs) if ephocs else set()
+    common_epochs = sorted(common_epochs, reverse=True)
+
+    selected_epochs = inquirer.checkbox(
+        message="Which epochs do you want to transfer?",
+        choices=[{"name": str(epoch), "value": epoch} for epoch in sorted(common_epochs)],
+        instruction="Use <space> to select, <enter> to confirm",
+        validate=lambda result: len(result) > 0,
+        invalid_message="Select at least one epoch.",
+    ).execute()
+
+    return selected_epochs
+    
+
+
+
+
 
 def transfer_experiment(exp: RemoteExperiment, config: Config) -> None:
     local_path = exp.local_path(config)
@@ -162,6 +204,10 @@ def main(config: Config) -> None:
         validate=lambda result: len(result) > 0,
         invalid_message="Select at least one experiment.",
     ).execute()
+
+    if config.epochs is None:
+        config.epochs = get_available_epochs(config, selected)
+        
 
     for exp in selected:
         transfer_experiment(exp, config)
