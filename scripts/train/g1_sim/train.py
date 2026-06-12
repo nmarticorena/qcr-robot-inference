@@ -6,7 +6,7 @@ import torch
 import tyro
 import wandb
 
-from rs_imle_policy.configs.default_configs import (
+from rs_imle_policy.configs.g1.experiments_configs import (
     G1ArmsDiffusionConfig,
     G1ArmsRSIMLEConfig,
     G1LeftArmDiffusionConfig,
@@ -39,6 +39,7 @@ def build_dataset(config: ExperimentConfig) -> G1ArmsDataset:
         action_keys=config.data.action_keys,
         vision_config=config.data.vision,
         use_next_state=config.data.use_next_state,
+        action_mode=config.data.action_mode,
     )
 
 

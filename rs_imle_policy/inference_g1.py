@@ -53,6 +53,10 @@ ACTION_KEY_DIMS = {
     "left_action_orien": 6,
     "right_action_pos": 3,
     "right_action_orien": 6,
+    "left_delta_pos": 3,
+    "left_delta_orien": 6,
+    "right_delta_pos": 3,
+    "right_delta_orien": 6,
     "left_relative_pos": 3,
     "left_relative_orien": 6,
     "right_relative_pos": 3,
@@ -366,7 +370,9 @@ class G1ArmsInferenceController:
 
         action_parts = self._split_action_parts(action.reshape(-1, action.shape[-1]))
         position_keys = [
-            key for key in self.config.data.action_keys if key.endswith("_action_pos") or key.endswith("_relative_pos")
+            key
+            for key in self.config.data.action_keys
+            if key.endswith("_action_pos") or key.endswith("_delta_pos") or key.endswith("_relative_pos")
         ]
         if not position_keys:
             return np.empty((0, 3), dtype=action.dtype)
@@ -382,24 +388,41 @@ class G1ArmsInferenceController:
     ) -> list[sm.SE3]:
         abs_pos_key = f"{side}_action_pos"
         abs_orien_key = f"{side}_action_orien"
+        delta_pos_key = f"{side}_delta_pos"
+        delta_orien_key = f"{side}_delta_orien"
         rel_pos_key = f"{side}_relative_pos"
         rel_orien_key = f"{side}_relative_orien"
 
         has_abs = abs_pos_key in parts or abs_orien_key in parts
+        has_delta = delta_pos_key in parts or delta_orien_key in parts
         has_rel = rel_pos_key in parts or rel_orien_key in parts
 
         if has_abs and (abs_pos_key not in parts or abs_orien_key not in parts):
             raise KeyError(f"Both {abs_pos_key} and {abs_orien_key} are required together.")
+        if has_delta and (delta_pos_key not in parts or delta_orien_key not in parts):
+            raise KeyError(f"Both {delta_pos_key} and {delta_orien_key} are required together.")
         if has_rel and (rel_pos_key not in parts or rel_orien_key not in parts):
             raise KeyError(f"Both {rel_pos_key} and {rel_orien_key} are required together.")
-        if has_abs and has_rel:
-            raise KeyError(f"Action keys for {side} arm cannot mix absolute and relative targets.")
+        if sum([has_abs, has_delta, has_rel]) > 1:
+            raise KeyError(f"Action keys for {side} arm cannot mix absolute, delta, and relative targets.")
 
         if has_abs:
             return transforms_utils.pos_rot_to_se3(
                 torch.from_numpy(parts[abs_pos_key]),
                 torch.from_numpy(parts[abs_orien_key]),
             )
+
+        if has_delta:
+            delta_poses = transforms_utils.pos_rot_to_se3(
+                torch.from_numpy(parts[delta_pos_key]),
+                torch.from_numpy(parts[delta_orien_key]),
+            )
+            current = sm.SE3(current_pose.copy())
+            absolute_poses = []
+            for delta_pose in delta_poses:
+                current = current * delta_pose
+                absolute_poses.append(current)
+            return absolute_poses
 
         if has_rel:
             relative_poses = transforms_utils.pos_rot_to_se3(
