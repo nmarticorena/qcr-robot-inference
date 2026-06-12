@@ -9,6 +9,7 @@ import tyro
 from rs_imle_policy.configs.eval_config import SinglePandaEvaluationConfig
 from rs_imle_policy.configs.train_config import ExperimentConfig
 from rs_imle_policy.inference import RobotInferenceController
+from rs_imle_policy.configs.experiment_configs import FrankaExperimentConfigChoice # noqa: F401
 
 
 class IndividualPolicyEvaluation:
