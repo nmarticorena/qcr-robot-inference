@@ -17,11 +17,13 @@ class IndividualPolicyEvaluation:
 
     def __init__(self, args: SinglePandaEvaluationConfig):
         self.args = args
-        self.media_dir = Path("saved_evaluation_media")/ args.run_name
-        self.media_dir.mkdir(parents=True, exist_ok=True)
-
         self.policy_config = self.load_policy_config()
         self.evaluation_manifest = self._load_evaluation_manifest()
+        self.media_dir = Path("saved_evaluation_media") / self.policy_config.task_name / args.run_name
+        self.media_dir.mkdir(parents=True, exist_ok=True)
+
+
+
         self.home_q = None if self.evaluation_manifest is None else self.evaluation_manifest.get("home_q")
 
     def run(self) -> None:
