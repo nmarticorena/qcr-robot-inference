@@ -94,6 +94,15 @@ class G1VisionConfig(VisionConfig):
 
     cameras: tuple[str, ...] = ("color_0",)
 
+@dataclass
+class PushTVisionConfig(VisionConfig):
+    """Vision configuration for PushT dataset"""
+
+    cameras: tuple[str, ...] = ("frames",)
+    
+    def __post_init__(self):
+        return 
+
 
 @dataclass
 class DataConfig:

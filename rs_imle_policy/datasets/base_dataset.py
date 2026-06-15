@@ -291,7 +291,10 @@ class BaseDataset(Dataset, abc.ABC):
         Returns:
             Dictionary containing state, action, and frame data
         """
-        frames = self.read_video_frames(episode, buffer_start_idx, buffer_end_idx)
+        if self.load_images:
+            frames = self.read_video_frames(episode, buffer_start_idx, buffer_end_idx)
+        else:
+            frames = {"frames": self.rlds[episode]["images"][buffer_start_idx : buffer_end_idx]}
 
         robot_state = self.rlds[episode]["state"][buffer_start_idx:buffer_end_idx]
         robot_action = self.sample_action_sequence(episode, buffer_start_idx, buffer_end_idx)
