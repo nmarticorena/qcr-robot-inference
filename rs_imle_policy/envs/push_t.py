@@ -499,8 +499,7 @@ class PushTEnv(gym.Env):
         self.goal_pose = np.array([256, 256, np.pi / 4])  # x, y, theta (in radians)
 
         # Add collision handeling
-        self.collision_handeler = self.space.add_collision_handler(0, 0)
-        self.collision_handeler.post_solve = self._handle_collision
+        self.collision_handeler = self.space.on_collision(0, 0, post_solve = self._handle_collision)
         self.n_contact_points = 0
 
         self.max_score = 50 * 100
