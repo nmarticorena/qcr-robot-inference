@@ -1,6 +1,6 @@
 # env import
-import gym
-from gym import spaces
+import gymnasium as gym
+from gymnasium import spaces
 import pygame
 import pymunk
 import pymunk.pygame_util
