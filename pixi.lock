@@ -123,7 +123,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gxx-9.5.0-h1fea6ba_13.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gxx_impl_linux-64-9.5.0-h99780fb_19.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gxx_linux-64-9.5.0-h43f449f_13.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/gymnasium-1.2.3-np2py311hec5889a_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/gymnasium-1.3.0-np2py311hec5889a_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/h5py-3.15.1-nompi_py311h0b2f468_101.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/harfbuzz-13.2.0-h6083320_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/hdf4-4.2.15-h2a13503_7.conda
@@ -788,13 +788,12 @@ environments:
       - conda: https://conda.anaconda.org/nmarticorena/linux-64/unitree_sdk2py-1.0.1-py311h48b7412_8.conda
       - pypi: .
       - pypi: ../motion_tools/
-      - pypi: git+https://github.com/nmarticorena/frankx.git?rev=legacy_version#19a14b078d4b3a5c68f02538f5575fa7935f0936
-      - pypi: git+https://github.com/nmarticorena/robotics-toolbox-python.git#d0716acd762725baf47dadb1709b3781f7db05f3
-      - pypi: git+https://github.com/nmarticorena/spatialgeometry.git#1a25c5cfbd36702bdf495068039fb6ab780d911e
-      - pypi: git+https://github.com/nmarticorena/spatialmath-python.git#e18684da6fe4a76625aef65d38f107ee451d037a
-      - pypi: git+https://github.com/nmarticorena/swift.git#0a8900c01736db66cc5457eaef50495b776e54ff
-      - pypi: git+https://github.com/nmarticorena/teleimager.git?rev=ed0c8d3#ed0c8d39de62e32a5c0bdb4d6e4b2d970335d67b
-      - pypi: https://files.pythonhosted.org/packages/03/43/00e9f7a133ef5fb30dab75e8c39b0fd9640129ed52c8202a86ef7aaf4363/pyribbit-0.1.46-py3-none-any.whl
+      - pypi: git+https://github.com/nmarticorena/frankx?rev=legacy_version#19a14b078d4b3a5c68f02538f5575fa7935f0936
+      - pypi: git+https://github.com/nmarticorena/robotics-toolbox-python#d0716acd762725baf47dadb1709b3781f7db05f3
+      - pypi: git+https://github.com/nmarticorena/spatialgeometry#1a25c5cfbd36702bdf495068039fb6ab780d911e
+      - pypi: git+https://github.com/nmarticorena/spatialmath-python#e18684da6fe4a76625aef65d38f107ee451d037a
+      - pypi: git+https://github.com/nmarticorena/swift#0a8900c01736db66cc5457eaef50495b776e54ff
+      - pypi: git+https://github.com/nmarticorena/teleimager?rev=ed0c8d3#ed0c8d39de62e32a5c0bdb4d6e4b2d970335d67b
       - pypi: https://files.pythonhosted.org/packages/28/3f/3fd093a11abd2a402d47b0783986c2811c23edcfbd7a75655ab8fb609f3a/ansitable-0.11.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/33/6b/e0547afaf41bf2c42e52430072fa5658766e3d65bd4b03a563d1b6336f57/distlib-0.4.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/42/59/123aee44a039b212cfb8d90be1adf06496a99b313ee1683aadf90b3d9799/progress-1.6.1-py3-none-any.whl
@@ -811,7 +810,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/db/3c/33bac158f8ab7f89b2e59426d5fe2e4f63f7ed25df84c036890172b412b5/cfgv-3.5.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e2/7a/cba41bab339a8f9d02767f1ed1493e920d160c938bb09a52f54891c49368/panda_python-0.8.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e4/33/58702880fe6bb3ed91cb21e1c92b002f9b73e32c0c5e3e9e2c0a94eaac61/colored-2.3.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ea/18/c7b57e20df0ecf19c0512d513dccdffccc8ccfdefaabe4150f2609f5e9a0/urchin-0.0.30-py3-none-any.whl
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-7_kmp_llvm.conda
   build_number: 7
@@ -2469,23 +2467,23 @@ packages:
   purls: []
   size: 28402
   timestamp: 1682617696817
-- conda: https://conda.anaconda.org/conda-forge/linux-64/gymnasium-1.2.3-np2py311hec5889a_0.conda
-  sha256: 345bc6530f37747446df8a424420e45e0e3a9d4bd5b8af91f8981186458bd526
-  md5: fe95e292ebb250ce594bc0409320f842
+- conda: https://conda.anaconda.org/conda-forge/linux-64/gymnasium-1.3.0-np2py311hec5889a_1.conda
+  sha256: 2c8ffcd49c844d87780745a01a08d63ab90c822e03a21a1603566dc9c937078a
+  md5: d6623a5018749bb8fcccc76c793d96f2
   depends:
   - python
   - cloudpickle >=1.2.0
   - farama-notifications
   - jax-jumpy >=1.0.0
   - typing_extensions >=4.3.0
-  - python_abi 3.11.* *_cp311
   - numpy >=1.23,<3
+  - python_abi 3.11.* *_cp311
   license: MIT
   license_family: MIT
   purls:
   - pkg:pypi/gymnasium?source=hash-mapping
-  size: 1138374
-  timestamp: 1769938728414
+  size: 1139316
+  timestamp: 1779989108164
 - conda: https://conda.anaconda.org/conda-forge/linux-64/h5py-3.15.1-nompi_py311h0b2f468_101.conda
   sha256: 6bf4f9a6ab5ccbfd8a2a6f130d5c14cb12f77ada367d3fa7724cd2f6515bddab
   md5: 1ce254e09ec4982ed0334e5e6f113e1c
@@ -12161,13 +12159,13 @@ packages:
   - scipy>=1.15.0,<2
   - spatialmath-python
   - tyro>=1.0.6,<2
-  - urchin
+  - urdfpy>=0.0.22,<0.0.23
   requires_python: '>=3.10.0,<3.15'
-- pypi: git+https://github.com/nmarticorena/frankx.git?rev=legacy_version#19a14b078d4b3a5c68f02538f5575fa7935f0936
+- pypi: git+https://github.com/nmarticorena/frankx?rev=legacy_version#19a14b078d4b3a5c68f02538f5575fa7935f0936
   name: frankx
   version: 0.1.1
   requires_python: '>=3.6'
-- pypi: git+https://github.com/nmarticorena/robotics-toolbox-python.git#d0716acd762725baf47dadb1709b3781f7db05f3
+- pypi: git+https://github.com/nmarticorena/robotics-toolbox-python#d0716acd762725baf47dadb1709b3781f7db05f3
   name: roboticstoolbox-python
   version: 2.0.0
   requires_dist:
@@ -12199,7 +12197,7 @@ packages:
   - sphinx-autodoc-typehints ; extra == 'docs'
   - sphinx-favicon ; extra == 'docs'
   requires_python: '>=3.7'
-- pypi: git+https://github.com/nmarticorena/spatialgeometry.git#1a25c5cfbd36702bdf495068039fb6ab780d911e
+- pypi: git+https://github.com/nmarticorena/spatialgeometry#1a25c5cfbd36702bdf495068039fb6ab780d911e
   name: spatialgeometry
   version: 2.0.0
   requires_dist:
@@ -12216,7 +12214,7 @@ packages:
   - sphinx-rtd-theme ; extra == 'docs'
   - sphinx-autorun ; extra == 'docs'
   requires_python: '>=3.7'
-- pypi: git+https://github.com/nmarticorena/spatialmath-python.git#e18684da6fe4a76625aef65d38f107ee451d037a
+- pypi: git+https://github.com/nmarticorena/spatialmath-python#e18684da6fe4a76625aef65d38f107ee451d037a
   name: spatialmath-python
   version: 2.0.0
   requires_dist:
@@ -12241,7 +12239,7 @@ packages:
   - matplotlib==3.5.1 ; extra == 'ros-humble'
   - numpy<2 ; extra == 'ros-humble'
   requires_python: '>=3.7'
-- pypi: git+https://github.com/nmarticorena/swift.git#0a8900c01736db66cc5457eaef50495b776e54ff
+- pypi: git+https://github.com/nmarticorena/swift#0a8900c01736db66cc5457eaef50495b776e54ff
   name: swift-sim
   version: 2.0.0
   requires_dist:
@@ -12263,7 +12261,7 @@ packages:
   - ipython ; extra == 'nb'
   - notebook ; extra == 'nb'
   requires_python: '>=3.7'
-- pypi: git+https://github.com/nmarticorena/teleimager.git?rev=ed0c8d3#ed0c8d39de62e32a5c0bdb4d6e4b2d970335d67b
+- pypi: git+https://github.com/nmarticorena/teleimager?rev=ed0c8d3#ed0c8d39de62e32a5c0bdb4d6e4b2d970335d67b
   name: teleimager
   version: 1.5.0
   requires_dist:
@@ -12276,29 +12274,6 @@ packages:
   - aiortc ; extra == 'server'
   - pupil-labs-uvc ; extra == 'server'
   requires_python: '>=3.8,<3.12'
-- pypi: https://files.pythonhosted.org/packages/03/43/00e9f7a133ef5fb30dab75e8c39b0fd9640129ed52c8202a86ef7aaf4363/pyribbit-0.1.46-py3-none-any.whl
-  name: pyribbit
-  version: 0.1.46
-  sha256: 0d4943f7cc6903f20ef42787e9357d7bb25c95f2c04da9dfa1a8021bdf9e0ab6
-  requires_dist:
-  - freetype-py
-  - imageio
-  - networkx
-  - numpy
-  - pillow
-  - pyglet>=1.4.10
-  - pyopengl>=3.1.0
-  - scipy
-  - six
-  - trimesh
-  - flake8 ; extra == 'dev'
-  - pre-commit ; extra == 'dev'
-  - pytest ; extra == 'dev'
-  - pytest-cov ; extra == 'dev'
-  - tox ; extra == 'dev'
-  - sphinx ; extra == 'docs'
-  - sphinx-rtd-theme ; extra == 'docs'
-  - sphinx-automodapi ; extra == 'docs'
 - pypi: https://files.pythonhosted.org/packages/28/3f/3fd093a11abd2a402d47b0783986c2811c23edcfbd7a75655ab8fb609f3a/ansitable-0.11.5-py3-none-any.whl
   name: ansitable
   version: 0.11.5
@@ -12472,26 +12447,4 @@ packages:
   name: colored
   version: 2.3.1
   sha256: 15d85396d6841f79534bf4668330b5e8686a5e58e730c84ada0e09d335b21fd1
-  requires_python: '>=3.9'
-- pypi: https://files.pythonhosted.org/packages/ea/18/c7b57e20df0ecf19c0512d513dccdffccc8ccfdefaabe4150f2609f5e9a0/urchin-0.0.30-py3-none-any.whl
-  name: urchin
-  version: 0.0.30
-  sha256: d27175e81a8ab348eaeda004225c88b926c809a92e297134cb4c64b6e0f78bf6
-  requires_dist:
-  - lxml
-  - networkx
-  - numpy>=1.20
-  - pillow
-  - pycollada>=0.6
-  - pyribbit>=0.1.46
-  - scipy
-  - trimesh
-  - flake8 ; extra == 'dev'
-  - pre-commit ; extra == 'dev'
-  - pytest ; extra == 'dev'
-  - pytest-cov ; extra == 'dev'
-  - tox ; extra == 'dev'
-  - sphinx ; extra == 'docs'
-  - sphinx-rtd-theme ; extra == 'docs'
-  - sphinx-automodapi ; extra == 'docs'
   requires_python: '>=3.9'
