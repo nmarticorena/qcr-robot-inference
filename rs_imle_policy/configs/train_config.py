@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 import pathlib
+from pathlib import Path
 from typing import Literal, Optional
 
 
@@ -59,25 +60,39 @@ default_cameras = {
 
 
 @dataclass
+class ResNetConfig:
+    """ResNet vision encoder configuration"""
+
+    name: str = "resnet18"
+    weights: Optional[str] = None
+    use_spatial_softmax: bool = True
+    num_kp: int = 256
+    feature_dim: int = 512
+
+    def __post_init__(self):
+        if self.use_spatial_softmax:
+            self.feature_dim = self.num_kp * 2
+
+
+
+@dataclass
 class VisionConfig:
     """Vision feature configuration"""
 
-    vision_features_dim: int = 512
     cameras: tuple[str, ...] = ("wrist", "side", "top")
     img_shape: tuple[int, int] = (240, 320)
+    center_crop: tuple[int, int] = (216, 288)
 
     def __post_init__(self):
         self.cameras_params: list[CameraConfig] = [default_cameras[cam] for cam in self.cameras]
 
+   
 
 @dataclass
 class G1VisionConfig(VisionConfig):
     """Vision configuration for G1 dataset"""
 
     cameras: tuple[str, ...] = ("color_0",)
-
-    def __post_init__(self):
-        return
 
 
 @dataclass
@@ -117,6 +132,13 @@ class DataConfig:
 
     # Vision configuration
     vision: VisionConfig = field(default_factory=VisionConfig)
+
+    def get_name(self) -> str:
+        string = ""
+        string += "ra" if self.action_relative else "aa"
+        string += "_next" if self.use_next_state else "_leader"
+        string += "_" + "_".join(self.vision.cameras) 
+        return string
 
 
 @dataclass
@@ -191,14 +213,15 @@ class OptimConfig:
 
     lr: float = 1e-4
     weight_decay: float = 1e-6
-    num_epochs: int = 1200
+    num_epochs: int = 1000
     batch_size: int = 64
-    num_workers: int = 11
+    num_workers: int = 16
     lr_scheduler_profile: str = "cosine"
     num_warmup_steps: int = 500
     eval_interval: int = 10
     num_eval_episodes: int = 1
-    save_period: int = 10
+    save_period: int = 50
+    keypoint_metrics_log_interval: int = 100
 
 
 @dataclass
@@ -210,6 +233,9 @@ class BaseModel:
     pred_horizon: int = 16
     action_horizon: int = 8
     obs_horizon: int = 2
+    use_clamping: bool = False
+
+    vision_model: ResNetConfig = field(default_factory=ResNetConfig)
 
 
 @dataclass
@@ -217,10 +243,19 @@ class RSIMLE(BaseModel):
     """RS-IMLE model configuration"""
 
     name: str = "rs_imle"
-    n_samples_per_condition: int = 10
-    epsilon: float = 0.1
+    n_samples_per_condition: int = 20
+    epsilon: float = 0.03
     traj_consistency: bool = False
     periodic_length: int = 5  # C steps for a new trajectory to be selected eq(6)
+
+@dataclass
+class FlowMatching(BaseModel):
+    """Flow Matching model configuration"""
+
+    name: str = "flow_matching"
+    timestep_integer_scaler: int = 100 # from defaults of RS-IMLE repo
+    num_flow_iters: int = 1
+    use_clamping: bool = True
 
 
 @dataclass
@@ -240,7 +275,7 @@ class ExperimentConfig:
 
     exp_name: str
     dataset_path: pathlib.Path
-    model: Diffusion | RSIMLE
+    model: Diffusion | RSIMLE | FlowMatching
     task_name: str = "default"
     debug: bool = False
 
@@ -252,15 +287,27 @@ class ExperimentConfig:
     action_shape: int = 0  # Solved during training
     obs_shape: int = 0  # Solved during training
 
+    def process_name(self) -> str:
+        name = ""
+        name += self.model.name + "_"
+        name += self.data.get_name() + "_"
+        # name += self.task_name + "_"
+        name += self.exp_name
+        return name
+
 
 @dataclass
 class LoaderConfig:
     """Configuration for data loading"""
-
-    path: pathlib.Path
+    path: Path
     epoch: Optional[int] = None
     timeout: int = 60  # Timeout for experiment in seconds
-    episodes: int = 10  # total number of episodes to run
+    episodes: int = 10  # exclusive max episode id to run
+    initial_id: int = 0  # first episode/experiment id to run
+    evaluation_path: Optional[Path] = None
+    repeat_experiment_id: Optional[int] = None  # experiment id to repeat
+    n_samples: int = 10  # total repeated-evaluation samples to collect
+    silent_rerun: bool = True  # Whether to open or not the current rerun recording
     exp_name: Optional[str] = None
     dry_run: bool = False
     traj_consistency: bool = False # Only valid for RS-IMLE

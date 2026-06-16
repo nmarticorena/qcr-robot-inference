@@ -2,10 +2,8 @@ from rs_imle_policy.configs.train_config import (
     ExperimentConfig,
     RSIMLE,
     Diffusion,
+    FlowMatching,
     DataConfig,
-    G1ArmsDataConfig,
-    G1LeftArmDataConfig,
-    G1RightArmDataConfig,
 )
 from dataclasses import dataclass, field
 
@@ -35,13 +33,12 @@ class RelativeActionsConfig(DataConfig):
     )
     action_relative: bool = True
 
-
 # RS-IMLE Configurations
 @dataclass
 class PickPlaceRSMLEConfig(ExperimentConfig):
     """Pick and place task with RS-IMLE using absolute actions"""
 
-    model: RSIMLE | Diffusion = field(default_factory=RSIMLE)
+    model: RSIMLE = field(default_factory=RSIMLE)
     data: DataConfig = field(default_factory=AbsoluteActionsConfig)
 
 
@@ -49,7 +46,7 @@ class PickPlaceRSMLEConfig(ExperimentConfig):
 class PickPlaceRSMLERelativeConfig(ExperimentConfig):
     """Pick and place task with RS-IMLE using relative actions"""
 
-    model: RSIMLE | Diffusion = field(default_factory=RSIMLE)
+    model: RSIMLE = field(default_factory=RSIMLE)
     data: DataConfig = field(default_factory=RelativeActionsConfig)
 
 
@@ -58,7 +55,7 @@ class PickPlaceRSMLERelativeConfig(ExperimentConfig):
 class PickPlaceDiffusionConfig(ExperimentConfig):
     """Pick and place task with Diffusion using absolute actions"""
 
-    model: RSIMLE | Diffusion = field(default_factory=Diffusion)
+    model: Diffusion = field(default_factory=Diffusion)
     data: DataConfig = field(default_factory=AbsoluteActionsConfig)
 
 
@@ -69,64 +66,26 @@ class PickPlaceDiffusionRelativeConfig(ExperimentConfig):
     model: RSIMLE | Diffusion = field(default_factory=Diffusion)
     data: DataConfig = field(default_factory=RelativeActionsConfig)
 
-
 @dataclass
-class G1ArmsRSIMLEConfig(ExperimentConfig):
-    """G1 arms dataset with RS-IMLE"""
+class PickPlaceFlowMatchingConfig(ExperimentConfig):
+    """Pick and place task with Diffusion using absolute actions"""
 
-    model: RSIMLE | Diffusion = field(default_factory=RSIMLE)
-    data: DataConfig = field(default_factory=G1ArmsDataConfig)
-
-
-@dataclass
-class G1ArmsDiffusionConfig(ExperimentConfig):
-    """G1 arms dataset with Diffusion"""
-
-    model: RSIMLE | Diffusion = field(default_factory=Diffusion)
-    data: DataConfig = field(default_factory=G1ArmsDataConfig)
+    model: FlowMatching = field(default_factory=FlowMatching)
+    data: DataConfig = field(default_factory=AbsoluteActionsConfig)
 
 
 @dataclass
-class G1LeftArmRSIMLEConfig(ExperimentConfig):
-    """G1 left arm dataset with RS-IMLE"""
+class PickPlaceFlowMatchingRelativeConfig(ExperimentConfig):
+    """Pick and place task with Diffusion using relative actions"""
 
-    model: RSIMLE | Diffusion = field(default_factory=RSIMLE)
-    data: DataConfig = field(default_factory=G1LeftArmDataConfig)
-
-
-@dataclass
-class G1LeftArmDiffusionConfig(ExperimentConfig):
-    """G1 left arm dataset with Diffusion"""
-
-    model: RSIMLE | Diffusion = field(default_factory=Diffusion)
-    data: DataConfig = field(default_factory=G1LeftArmDataConfig)
-
-
-@dataclass
-class G1RightArmRSIMLEConfig(ExperimentConfig):
-    """G1 right arm dataset with RS-IMLE"""
-
-    model: RSIMLE | Diffusion = field(default_factory=RSIMLE)
-    data: DataConfig = field(default_factory=G1RightArmDataConfig)
-
-
-@dataclass
-class G1RightArmDiffusionConfig(ExperimentConfig):
-    """G1 right arm dataset with Diffusion"""
-
-    model: RSIMLE | Diffusion = field(default_factory=Diffusion)
-    data: DataConfig = field(default_factory=G1RightArmDataConfig)
-
+    model: FlowMatching = field(default_factory=FlowMatching)
+    data: DataConfig = field(default_factory=RelativeActionsConfig)
 
 ExperimentConfigChoice = (
     PickPlaceRSMLEConfig
     | PickPlaceRSMLERelativeConfig
     | PickPlaceDiffusionConfig
     | PickPlaceDiffusionRelativeConfig
-    | G1ArmsRSIMLEConfig
-    | G1ArmsDiffusionConfig
-    | G1LeftArmRSIMLEConfig
-    | G1LeftArmDiffusionConfig
-    | G1RightArmRSIMLEConfig
-    | G1RightArmDiffusionConfig
+    | PickPlaceFlowMatchingConfig
+    | PickPlaceFlowMatchingRelativeConfig
 )

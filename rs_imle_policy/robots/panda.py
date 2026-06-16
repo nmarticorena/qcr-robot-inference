@@ -1,24 +1,16 @@
 from enum import Enum
+import time
+from typing import Optional
+
 import numpy as np
 from numpy.typing import NDArray
-from typing import Optional
 
 from frankx import Gripper, Robot, JointMotion, Waypoint, WaypointMotion, Affine
 from panda_py import Panda, libfranka
 
 from rs_imle_policy.utils import transforms
 from rs_imle_policy.robots.base import BaseRobot
-
-
-# Constants TODO: Decide where is better to have these
-DEFAULT_ROBOT_IP = "172.16.0.2"
-DEFAULT_GRIPPER_SPEED = 0.1
-DEFAULT_GRIPPER_FORCE = 40
-GRIPPER_OPEN_WIDTH = 0.08
-DEFAULT_DYNAMIC_REL = 0.4
-CARTESIAN_IMPEDANCE = [400.0, 400.0, 400.0, 40.0, 40.0, 40.0]
-ACCEL_REL = 0.1
-JERK_REL = 0.1
+from rs_imle_policy.configs.panda_configs import SinglePandaConfig 
 
 
 class GripperState(Enum):
@@ -47,8 +39,7 @@ class FrankxRobot(BaseRobot):
 
     def __init__(
         self,
-        ip: str = DEFAULT_ROBOT_IP,
-        dynamic_rel: float = DEFAULT_DYNAMIC_REL,
+        config: SinglePandaConfig,
         dry_run: bool = False,
     ):
         """Initialize the robot controller.
@@ -58,10 +49,13 @@ class FrankxRobot(BaseRobot):
             dynamic_rel: Dynamic scaling factor for robot motion
         """
 
-        self.robot = Robot(ip, dynamic_rel=dynamic_rel, repeat_on_error=True)
-
+        self.config = config
+        self.robot = Robot(config.robot_ip, 
+                           dynamic_rel=config.dynamic_rel, 
+                           repeat_on_error=config.repeat_on_error)
+        
         self.robot.recover_from_errors()
-        self.gripper = Gripper(fci_ip=ip, speed=DEFAULT_GRIPPER_SPEED)
+        self.gripper = Gripper(fci_ip=config.robot_ip, speed=config.gripper_speed)
         self.gripper.open(True)
         self.gripper_state = GripperState.OPEN
 
@@ -85,9 +79,10 @@ class FrankxRobot(BaseRobot):
 
     def initialize_cartesian_impedance(self):
         """Initialize Cartesian impedance control parameters."""
-        self.robot.set_cartesian_impedance(CARTESIAN_IMPEDANCE)
-        self.robot.accel_rel = ACCEL_REL
-        self.robot.jerk_rel = JERK_REL
+        self.robot.set_cartesian_impedance(self.config.cartesian_impedance)
+        self.robot.set_dynamic_rel(self.config.dynamic_rel,
+                                   accel_rel = self.config.accel_rel,
+                                   jerk_rel = self.config.jerk_rel)
 
     def move_to_start(self, home_config: Optional[NDArray]):
         """Move robot to starting configuration.
@@ -112,13 +107,36 @@ class FrankxRobot(BaseRobot):
             self.gripper.open(blocking=False)
             self.gripper_state = GripperState.OPEN
 
-    def stop_motion(self, release: bool = True):
+    def stop_motion(
+        self,
+        release: bool = True,
+    ):
         """Stop current robot motion.
 
         Args:
             release: If True, open the gripper after stopping
+            smooth_stop_duration_s: Time to hold the current pose before finishing
+                the waypoint motion. This gives the controller time to decelerate.
+            smooth_stop_rate_hz: Number of hold waypoints per second during the
+                smooth stop window.
         """
+        smooth_stop_duration_s = self.config.stop_duration_s
+        smooth_stop_rate_hz = self.config.stop_rate_hz
         if self.motion is not None:
+            if (
+                not self.dry_run
+                and smooth_stop_duration_s > 0
+                and smooth_stop_rate_hz > 0
+            ):
+                current_pose = self.motion.current_pose()
+                n_hold_waypoints = max(
+                    1,
+                    int(np.ceil(smooth_stop_duration_s * smooth_stop_rate_hz)),
+                )
+                self.motion.set_next_waypoints(
+                    [Waypoint(affine=current_pose) for _ in range(n_hold_waypoints)]
+                )
+                time.sleep(smooth_stop_duration_s)
             self.motion.finish()
         if release:
             self.open_gripper()
@@ -182,6 +200,26 @@ class FrankxRobot(BaseRobot):
             return
         self.motion.set_next_waypoints(waypoints)
 
+    def get_next_waypoints(self, translations, orientations, relative: bool = False):
+        """Get the next waypoints for the robot to follow.
+
+        Args:
+            translations: Array of shape (N, 3) containing target positions
+            orientations: Array of shape (N, 4) in quaternion format [w, x, y, z]
+            relative: If True, waypoints are relative to current pose (not yet implemented)
+
+        Returns:
+            List of Waypoint objects corresponding to the input translations and orientations
+        """
+        ref = Waypoint.Relative if relative else Waypoint.Absolute
+
+        waypoints = [
+            Waypoint(Affine(trans[0], trans[1], trans[2], q[0], q[1], q[2], q[3]), ref)
+            for trans, q in zip(translations, orientations)
+        ]
+        return waypoints
+
+
     def init_waypoint_motion(self):
         """Initialize waypoint motion controller.
 
@@ -213,8 +251,7 @@ class PandaPyRobot:
 
     def __init__(
         self,
-        ip: str = DEFAULT_ROBOT_IP,
-        dynamic_rel: float = DEFAULT_DYNAMIC_REL,
+        config: SinglePandaConfig,
         dry_run: bool = False,
     ):
         """Initialize the PandaPy robot controller.
@@ -224,11 +261,11 @@ class PandaPyRobot:
             dynamic_rel: Dynamic scaling factor for robot motion
         """
 
-        self.robot = Panda(hostname=ip)
+        self.robot = Panda(hostname=config.robot_ip)
 
         self.robot.get_robot().automatic_error_recovery()
-        self.gripper = libfranka.Gripper(ip)
-        self.gripper.move(GRIPPER_OPEN_WIDTH, DEFAULT_GRIPPER_SPEED)
+        self.gripper = libfranka.Gripper(config.robot_ip)
+        self.gripper.move(config.gripper_open_width, config.gripper_speed)
         self.gripper_state = GripperState.OPEN
 
         self.dry_run = dry_run
@@ -238,6 +275,8 @@ class PandaPyRobot:
 
         self.pos = self.X_BE[:3, 3]
         self.rot = self.X_BE[:3, :3]
+        self.move_async = None
+        self.config = config
 
     def get_gripper_state(self) -> float:
         """Get current gripper width.
@@ -254,6 +293,7 @@ class PandaPyRobot:
             home_config: Joint configuration for home position, or None to skip
         """
         self.robot.teaching_mode(False)
+        # self.robot.recover_from_errors()
         if home_config is not None:
             self.robot.move_to_joint_position(home_config)
         self.open_gripper()
@@ -261,13 +301,13 @@ class PandaPyRobot:
     def close_gripper(self):
         """Close the gripper if not already closed."""
         if self.gripper_state != GripperState.CLOSED:
-            self.gripper.grasp(0.0, DEFAULT_GRIPPER_SPEED, DEFAULT_GRIPPER_FORCE)
+            self.gripper.grasp(0.0, self.config.gripper_speed, self.config.gripper_force)
             self.gripper_state = GripperState.CLOSED
 
     def open_gripper(self):
         """Open the gripper if not already open."""
         if self.gripper_state != GripperState.OPEN:
-            self.gripper.move(GRIPPER_OPEN_WIDTH, DEFAULT_GRIPPER_SPEED)
+            self.gripper.move(self.config.gripper_open_width, self.config.gripper_speed)
             self.gripper_state = GripperState.OPEN
 
     def get_state(self):
@@ -318,6 +358,25 @@ class PandaPyRobot:
         )
         return
 
+    def get_next_waypoints(self, translations, orientations, relative: bool = False):
+        """Get the next waypoints for the robot to follow.
+
+        Args:
+            translations: Array of shape (N, 3) containing target positions
+            orientations: Array of shape (N, 4) in quaternion format [w, x, y, z]
+            relative: If True, waypoints are relative to current pose (not yet implemented)
+
+        Returns:
+            List of Waypoint objects corresponding to the input translations and orientations
+        """
+        print(
+            "Waypoints not implemented for pandapy controller yet, this interface is mainly for",
+            "using the teaching mode controller (gravity compensation) for inference using ",
+            "the dry run option. If you want to use the waypoint interface, please use the ",
+            "FrankxRobot controller instead.",
+        )
+        return []
+
     def init_waypoint_motion(self):
         """Initialize waypoint motion controller.
 
@@ -325,3 +384,11 @@ class PandaPyRobot:
         starts asynchronous motion execution.
         """
         self.robot.teaching_mode(True)
+
+    def stop_motion(
+        self,
+        release: bool = True,
+    ):
+        """Not implemented"""
+        return
+

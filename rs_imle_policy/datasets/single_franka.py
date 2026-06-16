@@ -6,6 +6,7 @@ for training robot manipulation policies from demonstrations.
 
 import json
 import os
+from pathlib import Path
 from typing import List
 
 import numpy as np
@@ -59,6 +60,30 @@ class PandaPolicyDataset(BaseDataset):
         self.robot = rtb.models.Panda()
         super().__init__(*args, **kwargs)
 
+    @classmethod
+    def load_for_replay(
+        cls,
+        dataset_path: str | os.PathLike,
+        *,
+        use_next_state: bool = True,
+    ) -> "PandaPolicyDataset":
+        """Load low-dimensional episode data without rewriting stats or images.
+
+        This is intended for inspection/replay tools that need raw poses and
+        gripper actions rather than normalized training samples.
+        """
+        return cls(
+            Path(dataset_path),
+            pred_horizon=1,
+            obs_horizon=1,
+            action_horizon=1,
+            visualize=True,
+            save_normalization_stats=False,
+            normalize=False,
+            load_images=False,
+            use_next_state=use_next_state,
+        )
+
     def get_relative_transform(self, current_pose: List[NDArray], next_pose: List[NDArray]) -> List[sm.SE3]:
         """Compute relative transformation between consecutive poses.
 
@@ -86,6 +111,8 @@ class PandaPolicyDataset(BaseDataset):
             os.listdir(os.path.join(self.dataset_path, "episodes")),
             key=int,
         )
+        self.episode_names = episodes
+        self.episode_name_to_index = {episode: episode_index for episode_index, episode in enumerate(episodes)}
 
         for episode_index, episode in enumerate(episodes):
             episode_path = os.path.join(self.dataset_path, "episodes", episode, "state.json")

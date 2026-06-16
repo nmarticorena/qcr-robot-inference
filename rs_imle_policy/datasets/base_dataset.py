@@ -24,6 +24,10 @@ from torch.utils.data import Dataset
 from rs_imle_policy.configs.train_config import VisionConfig
 
 
+RAW_ORIENTATION_PREFIXES = ("orien_",)
+RAW_ORIENTATION_SUFFIXES = ("_orien",)
+
+
 class BaseDataset(Dataset, abc.ABC):
     """
     Base dataset example for robot manipulation demostrations
@@ -44,6 +48,10 @@ class BaseDataset(Dataset, abc.ABC):
         action_keys: tuple[str, ...] = (),
         vision_config: VisionConfig = VisionConfig(),
         visualize: bool = False,
+        skip_normalization_keys: tuple[str, ...] = (),
+        save_normalization_stats: Optional[bool] = None,
+        normalize: bool = True,
+        load_images: bool = True,
     ):
         self.dataset_path = dataset_path
         self.pred_horizon = pred_horizon
@@ -54,6 +62,10 @@ class BaseDataset(Dataset, abc.ABC):
         self.action_keys = action_keys
         self.vision_config = vision_config
         self.visualize = visualize
+        self.skip_normalization_keys = skip_normalization_keys
+        self.save_normalization_stats = not visualize if save_normalization_stats is None else save_normalization_stats
+        self.normalize = normalize
+        self.load_images = load_images
 
         self.transform = transform or transforms.Compose(
             [
@@ -66,20 +78,21 @@ class BaseDataset(Dataset, abc.ABC):
         self.rlds = self.create_rlds_dataset()
         self.stats: dict[str, dict[str, NDArray]] = defaultdict(dict)
         self.compute_normalization_stats()
-        if not visualize:
+        if self.save_normalization_stats:
             with open(self.dataset_path / "stats.pkl", "wb") as f:
                 pkl.dump(dict(self.stats), f)
 
         self.indices = self.create_sample_indices(self.rlds, sequence_length=self.pred_horizon)
-        self.normalize_rlds()
+        if self.normalize:
+            self.normalize_rlds()
 
-        self.cached_dataset = h5py.File(self.dataset_path / "images.h5", "r")
-        assert self.cached_dataset is not None, "Failed to load cached dataset from HDF5 file."
+        self.cached_dataset = None
+        if self.load_images:
+            self.cached_dataset = h5py.File(self.dataset_path / "images.h5", "r")
+            assert self.cached_dataset is not None, "Failed to load cached dataset from HDF5 file."
 
         if not visualize:
             self.low_dim_obs_shape = self.rlds[0]["state"].shape[1]
-            self.img_shape = vision_config.vision_features_dim * len(vision_config.cameras)
-            self.obs_shape = self.low_dim_obs_shape + self.img_shape
             self.action_shape = self.rlds[0]["action"].shape[1]
 
     def get_relative_transform(self, current_pose: List[NDArray], next_pose: List[NDArray]) -> List[sm.SE3]:
@@ -105,15 +118,45 @@ class BaseDataset(Dataset, abc.ABC):
     def compute_normalization_stats(self):
         """Compute normalization statistics for all data keys."""
 
-        def get_data(key: str):
-            data = np.concatenate(
+        def get_data(key: str) -> NDArray:
+            return np.concatenate(
                 [np.array(self.rlds[episode][key]) for episode in self.rlds.keys()],
                 axis=0,
             )
-            self.stats[key] = get_data_stats(data)
+
+        def get_key_stats(key: str) -> dict:
+            data = get_data(key)
+            if self.skip_normalization(key):
+                return get_identity_data_stats(data)
+            return get_data_stats(data)
+
+        def get_composite_stats(keys: tuple[str, ...]) -> dict:
+            mins = []
+            maxes = []
+            for key in keys:
+                key_stats = get_key_stats(key)
+                mins.append(np.asarray(key_stats["min"]).reshape(-1))
+                maxes.append(np.asarray(key_stats["max"]).reshape(-1))
+            return {
+                "min": np.concatenate(mins, axis=0),
+                "max": np.concatenate(maxes, axis=0),
+            }
 
         for keys in self.rlds[0].keys():
-            get_data(keys)
+            if keys == "state" and self.low_dim_obs_keys:
+                self.stats[keys] = get_composite_stats(self.low_dim_obs_keys)
+            elif keys == "action" and self.action_keys:
+                self.stats[keys] = get_composite_stats(self.action_keys)
+            else:
+                self.stats[keys] = get_key_stats(keys)
+
+    def skip_normalization(self, key: str) -> bool:
+        """Return True when a key should pass through normalization unchanged."""
+        return (
+            key in self.skip_normalization_keys
+            or key.startswith(RAW_ORIENTATION_PREFIXES)
+            or key.endswith(RAW_ORIENTATION_SUFFIXES)
+        )
 
     def normalize_rlds(self) -> None:
         """Apply normalization to every key in each episode."""
@@ -154,8 +197,11 @@ class BaseDataset(Dataset, abc.ABC):
         Returns:
             Dictionary mapping camera names to frame arrays
         """
+        if self.cached_dataset is None:
+            raise RuntimeError("Image cache was not loaded. Instantiate the dataset with load_images=True.")
+
         frames = {}
-        video = self.cached_dataset[str(episode)]
+        video = self.cached_dataset[str(episode).zfill(4)]
         for key in self.vision_config.cameras:
             frame = video[key][start_frame : start_frame + self.obs_horizon]
             frames[key] = np.array([self.transform(f) for f in frame])
@@ -256,6 +302,15 @@ def get_data_stats(data: NDArray) -> dict:
     """
     stats = {"min": np.min(data, axis=0), "max": np.max(data, axis=0)}
     return stats
+
+
+def get_identity_data_stats(data: NDArray) -> dict:
+    """Compute stats that make min/max normalization a no-op."""
+    feature_shape = np.asarray(data).shape[1:]
+    return {
+        "min": np.full(feature_shape, -1.0, dtype=np.float32),
+        "max": np.full(feature_shape, 1.0, dtype=np.float32),
+    }
 
 
 def normalize_data(data: NDArray, stats: dict) -> NDArray:

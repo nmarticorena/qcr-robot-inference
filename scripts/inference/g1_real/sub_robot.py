@@ -14,7 +14,6 @@ robot_gui = ReRunRobot.g1(rec)
 # TODO: Add network interface as
 ChannelFactoryInitialize(networkInterface=os.environ["G1_NETWORK_INTERFACE"], id=0)  # dds domain id
 controller = G1_29_ArmController(motion_mode=False, simulation_mode=False, sub_mode=True)
-# breakpoint()
 
 while True:
     q = controller.get_current_motor_q()

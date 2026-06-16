@@ -1,7 +1,9 @@
 import collections
+import json
 import os
 import time
 from collections import defaultdict
+from pathlib import Path
 from typing import Optional
 
 import cv2
@@ -14,6 +16,7 @@ from numpy.typing import NDArray
 import reactivex as rx
 from reactivex import operators as ops
 from reactivex.scheduler import NewThreadScheduler
+from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
 import rs_imle_policy.utils.transforms as transform_utils
 import rs_imle_policy.utils.viz as viz_utils
@@ -21,6 +24,7 @@ from rs_imle_policy.configs.train_config import (
     Diffusion,
     ExperimentConfig,
     RSIMLE,
+    FlowMatching,
     VisionConfig,
 )
 from rs_imle_policy.datasets.base_dataset import normalize_data, unnormalize_data
@@ -39,6 +43,11 @@ GRIPPER_CLOSE_THRESHOLD = 0.5
 PROGRESS_COMPLETE_THRESHOLD = 0.95
 OBSERVATION_WAIT_TIME_MS = 1
 INFERENCE_TARGET_DT_MULTIPLIER = 4
+REFERENCE_DISPLAY_SIZE = (320, 240)
+REFERENCE_OVERLAY_ALPHA = 0.5
+EVALUATION_WINDOW_NAME = "Evaluation setup"
+# DEFAULT_HOME_Q = np.deg2rad([-90, 0, 0, -90, 0, 90, 45])
+DEFAULT_HOME_Q = [0.0, -np.pi / 4, 0.0, -3 * np.pi / 4, 0.0, np.pi / 2, np.pi / 4]
 
 
 class PerceptionSystem:
@@ -62,6 +71,8 @@ class PerceptionSystem:
             enable_depth=vision_config.cameras_params[0].depth_enabled,
         )
         self.cams_config = vision_config
+        self.serial_numbers = serial_numbers
+        self.serial_to_name_map = {cam.serial_number: cam.name for cam in vision_config.cameras_params}
 
     def start(self):
         """Start the camera system and configure camera settings."""
@@ -72,6 +83,19 @@ class PerceptionSystem:
     def stop(self):
         """Stop the camera system."""
         self.cams.stop()
+
+    def serial_to_name(self, serial: str):
+        """Convert camera serial number to camera name.
+
+        Args:
+            serial: Serial number of the camera
+
+        Returns:
+            str: Name of the camera
+        """
+        return self.serial_to_name_map.get(serial, serial)
+        
+
 
 
 class RobotInferenceController:
@@ -98,8 +122,11 @@ class RobotInferenceController:
         eval_name: str,
         timeout: int,
         dry_run: bool = False,
+        home_q: Optional[NDArray] = None,
+        folder: Path = None,
     ):
         self.infer_idx = 0
+        self.folder = folder
         self.last_called_obs = time.time()
         self.seed(DEFAULT_SEED)
         self.config = config
@@ -107,7 +134,8 @@ class RobotInferenceController:
             self.robot = PandaPyRobot(dry_run=dry_run)
         else:
             self.robot = FrankxRobot(dry_run=dry_run)
-        self.robot.move_to_start(np.deg2rad([-90, 0, 0, -90, 0, 90, 45]))
+        self.home_q = DEFAULT_HOME_Q if home_q is None else np.asarray(home_q, dtype=float)
+        self.robot.move_to_start(self.home_q)
         self.timeout = timeout
 
         rtb_panda = rtb.models.Panda()
@@ -139,16 +167,15 @@ class RobotInferenceController:
     def setup_diffusion_policy(self):
         """Initialize the policy model and observation buffer."""
         torch.cuda.empty_cache()
-        self.policy = Policy(self.config, training = False)
+        self.policy = Policy(self.config, training = False, folder=self.folder)
 
         self.obs_horizon = self.config.model.obs_horizon
         self.obs_deque = collections.deque(maxlen=self.config.model.obs_horizon)
 
         if isinstance(self.config.model, RSIMLE):
-            self.prev_traj = torch.randn(
-                (1, self.config.model.pred_horizon, self.config.action_shape),
-                device=self.policy.device,
-            )
+            self.prev_traj: Optional[torch.Tensor] = None
+            self.prev_traj_pos: Optional[NDArray] = None
+            self.prev_traj_rot: Optional[NDArray] = None
 
     def process_inference_vision(self, obs_deque):
         """Process visual observations through encoders.
@@ -167,12 +194,12 @@ class RobotInferenceController:
         nagent_pos_np = normalize_data(agent_pos_np, stats=self.policy.stats["state"])
         nagent_pos = torch.from_numpy(nagent_pos_np).to(device, dtype=dtype)
 
-        if isinstance(self.config.model, Diffusion):
-            encoders = self.policy.ema_nets
-        elif isinstance(self.config.model, RSIMLE):
-            encoders = self.policy.nets
-        else:
-            raise NotImplementedError("Model not supported for inference.")
+        # if isinstance(self.config.model, Diffusion):
+        encoders = self.policy.nets
+        # elif isinstance(self.config.model, RSIMLE):
+            # encoders = self.policy.nets
+        # else:
+            # raise NotImplementedError("Model not supported for inference.")
 
         image_features = []
         with torch.no_grad():
@@ -249,12 +276,12 @@ class RobotInferenceController:
                 )
                 naction = noisy_action
                 # Initialize scheduler
-                assert self.policy.noise_scheduler is not None
+                assert isinstance(self.policy.noise_scheduler, DDPMScheduler)
                 self.policy.noise_scheduler.set_timesteps(self.config.model.num_diffusion_iters)
 
                 for k in self.policy.noise_scheduler.timesteps:
                     # Predict noise
-                    noise_pred = self.policy.ema_nets["noise_pred_net"](
+                    noise_pred = self.policy.nets["noise_pred_net"](
                         sample=naction, timestep=k, global_cond=obs_cond
                     )
 
@@ -267,6 +294,10 @@ class RobotInferenceController:
                     trans = debug_denoising[:, :3]
                     rot_6d = debug_denoising[:, 3:9]
                     rot_mat3x3 = transform_utils.rotation_6d_to_matrix(torch.from_numpy(rot_6d)).numpy()
+                    if self.config.data.action_relative:
+                        p0, r0 = self.robot.pos, self.robot.rot
+                        trans, rot_mat3x3 = self.transform_action_to_absolute(trans, rot_mat3x3, p0, r0)
+
                     for i in range(trans.shape[0]):
                         rr.log(
                             f"/debug/denoising_step/poses_{i}",
@@ -284,19 +315,34 @@ class RobotInferenceController:
                         device=self.policy.device,
                     )
                     batched_naction = self.policy.nets["generator"](noise, global_cond=obs_cond)
-                    prev_traj_end = self.prev_traj[:, 8:].reshape(1, -1)
-                    gen_traj_start = batched_naction[:, :8, :].reshape(32, -1)
+                    current_pos = self.robot.pos.copy()
+                    current_rot = self.robot.rot.copy()
+                    split_idx = self.config.model.pred_horizon // 2
 
-                    # Pick the generated trajectory that has its start closest to the end of the prev traj
-                    distances = torch.cdist(gen_traj_start, prev_traj_end)
-                    min_idx = distances.argmin(dim=0)
-                    action_debug = unnormalize_data(
-                        batched_naction.cpu().numpy(),
-                        stats=self.policy.stats["action"],
+                    comparison_actions = self.actions_for_consistency(
+                        batched_naction,
+                        current_pos,
+                        current_rot,
                     )
-                    naction = batched_naction[min_idx]
 
-                    action_debug_pos = action_debug[:, :, :3].reshape(-1, 3)
+                    if self.prev_traj is None or self.prev_traj_pos is None or self.prev_traj_rot is None:
+                        min_idx = np.random.randint(0, batched_naction.shape[0])
+                        distances = torch.zeros((batched_naction.shape[0], 1), device=self.policy.device)
+                    else:
+                        prev_comparison_actions = self.actions_for_consistency(
+                            self.prev_traj,
+                            self.prev_traj_pos,
+                            self.prev_traj_rot,
+                        )
+                        prev_traj_end = prev_comparison_actions[:, split_idx:].reshape(1, -1)
+                        gen_traj_start = comparison_actions[:, :split_idx].reshape(batched_naction.shape[0], -1)
+
+                        # Pick the generated trajectory that has its start closest to the end of the prev traj.
+                        distances = torch.cdist(gen_traj_start, prev_traj_end)
+                        min_idx = int(distances.argmin().item())
+
+                    naction = batched_naction[min_idx : min_idx + 1]
+                    action_debug_pos = comparison_actions[:, :, :3].reshape(-1, 3).cpu().numpy()
                     colors = distances.repeat_interleave(self.config.model.pred_horizon, 0)
                     rr.log(
                         "/debug/sampled_trajectories",
@@ -312,11 +358,14 @@ class RobotInferenceController:
                     )
 
                     if self.infer_idx % self.config.model.periodic_length == 0:
-                        index = np.random.uniform(0, 32, size=1)[0].astype(int)
-                        self.prev_traj = batched_naction[index, :, :].unsqueeze(0)
-
+                        index = np.random.randint(0, batched_naction.shape[0])
+                        self.set_prev_traj(
+                            batched_naction[index : index + 1],
+                            current_pos,
+                            current_rot,
+                        )
                     else:
-                        self.prev_traj = naction
+                        self.set_prev_traj(naction, current_pos, current_rot)
 
                 else:
                     noise = torch.randn(
@@ -326,6 +375,22 @@ class RobotInferenceController:
                     # clip noise
                     noise = torch.clamp(noise, -1, 1)
                     naction = self.policy.nets["generator"](noise, global_cond=obs_cond)
+            elif isinstance(self.config.model, FlowMatching):
+                noisy_action = torch.randn((1, self.config.model.pred_horizon, self.config.action_shape), device=self.config.model.device) #, dtype=self.precision)
+                naction = noisy_action
+
+                ts = torch.linspace(0.0, 1.0, self.config.model.num_flow_iters+1, device=self.config.model.device)[:-1]
+                dt = 1.0 / self.config.model.num_flow_iters
+                for t in ts:
+                    timestep = (t * self.config.model.timestep_integer_scaler).long()
+
+                    # predict noise
+                    pred = self.policy.nets['noise_pred_net'](
+                        sample=naction,
+                        timestep=timestep,
+                        global_cond=obs_cond
+                    )
+                    naction = naction + pred * dt
             else:
                 raise NotImplementedError("Model not supported for inference.")
 
@@ -360,6 +425,32 @@ class RobotInferenceController:
                 rr.TransformAxes3D(axis_length=0.1),
             )
 
+    def set_prev_traj(self, traj: torch.Tensor, pos: NDArray, rot: NDArray) -> None:
+        self.prev_traj = traj.detach().clone()
+        self.prev_traj_pos = np.array(pos, copy=True)
+        self.prev_traj_rot = np.array(rot, copy=True)
+
+    def actions_for_consistency(
+        self,
+        nactions: torch.Tensor,
+        pos: NDArray,
+        rot: NDArray,
+    ) -> torch.Tensor:
+        actions = unnormalize_data(nactions.detach().cpu().numpy(), stats=self.policy.stats["action"])
+
+        if self.config.data.action_relative:
+            absolute_actions = actions.copy()
+            for batch_idx in range(actions.shape[0]):
+                trans = actions[batch_idx, :, :3]
+                rot_6d = actions[batch_idx, :, 3:9]
+                rot_mats = transform_utils.rotation_6d_to_matrix(torch.from_numpy(rot_6d)).numpy()
+                trans, rot_mats = self.transform_action_to_absolute(trans, rot_mats, pos, rot)
+                absolute_actions[batch_idx, :, :3] = trans
+                absolute_actions[batch_idx, :, 3:9] = transform_utils.matrix_to_rotation_6d(rot_mats).numpy()
+            actions = absolute_actions
+
+        return torch.from_numpy(actions).to(self.policy.device, dtype=self.policy.precision)
+
     @staticmethod
     def transform_action_to_absolute(
         trans: NDArray,
@@ -389,22 +480,284 @@ class RobotInferenceController:
             current_pos = translations[i]
         return translations, rotations
 
-    def run_experiments(self, episodes: int):
+    def run_experiments(self, episodes: int, initial_id: int = 0):
         """Run multiple evaluation episodes.
 
         Args:
-            episodes: Number of episodes to run
+            episodes: Exclusive max episode id to run
+            initial_id: Episode id to use for the first run
         """
-        for i in range(episodes):
-            self.idx = i
-            print(f"Starting episode {i + 1}/{episodes}")
+        if initial_id < 0:
+            raise ValueError(f"Initial id must be non-negative, got {initial_id}.")
+        if episodes <= initial_id:
+            raise ValueError(
+                f"Episodes must be greater than initial id when used as the max episode, "
+                f"got episodes={episodes} and initial_id={initial_id}."
+            )
+
+        episode_ids = range(initial_id, episodes)
+        total_episodes = episodes - initial_id
+        for i, episode_id in enumerate(episode_ids):
+            self.idx = episode_id
+            print(f"Starting episode {i + 1}/{total_episodes} (id {self.idx})")
             self.done = False
             time.sleep(0.1)
-            self.robot.move_to_start(np.deg2rad([-90, 0, 0, -90, 0, 90, 45]))
+            self.robot.move_to_start(self.home_q)
 
             input("Press Enter to start the next episode...")
             self.obs_deque.clear()
             self.inference_loop()
+            self.all_frames = defaultdict(list)
+            print(f"Finished episode {i + 1}/{total_episodes} (id {self.idx})")
+
+    @staticmethod
+    def _resize_reference_frame(frame: np.ndarray) -> np.ndarray:
+        return cv2.resize(frame, REFERENCE_DISPLAY_SIZE)
+
+    @staticmethod
+    def _label_reference_frame(frame: np.ndarray, text: str) -> np.ndarray:
+        out = frame.copy()
+        cv2.rectangle(out, (0, 0), (out.shape[1], 28), (0, 0, 0), -1)
+        cv2.putText(
+            out,
+            text,
+            (8, 19),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (255, 255, 255),
+            1,
+            cv2.LINE_AA,
+        )
+        return out
+
+    @staticmethod
+    def _blank_reference_frame(text: str) -> np.ndarray:
+        frame = np.zeros((*REFERENCE_DISPLAY_SIZE[::-1], 3), dtype=np.uint8)
+        return RobotInferenceController._label_reference_frame(frame, text)
+
+    @staticmethod
+    def _overlay_reference_frame(
+        live_frame: Optional[np.ndarray],
+        reference_frame: Optional[np.ndarray],
+        camera_name: str,
+    ) -> np.ndarray:
+        if live_frame is None:
+            return RobotInferenceController._blank_reference_frame(f"{camera_name}: live missing")
+
+        live = RobotInferenceController._resize_reference_frame(live_frame)
+        if reference_frame is None:
+            return RobotInferenceController._label_reference_frame(live, f"{camera_name}: live")
+
+        reference = cv2.resize(reference_frame, (live.shape[1], live.shape[0]))
+        overlay = cv2.addWeighted(
+            live,
+            1.0 - REFERENCE_OVERLAY_ALPHA,
+            reference,
+            REFERENCE_OVERLAY_ALPHA,
+            0,
+        )
+        return RobotInferenceController._label_reference_frame(overlay, f"{camera_name}: overlay")
+
+    @staticmethod
+    def _pad_reference_width(frame: np.ndarray, width: int) -> np.ndarray:
+        if frame.shape[1] == width:
+            return frame
+        pad = np.zeros((frame.shape[0], width - frame.shape[1], 3), dtype=np.uint8)
+        return np.hstack([frame, pad])
+
+    def _load_reference_frames(self, experiment: dict) -> dict[str, np.ndarray]:
+        frames: dict[str, np.ndarray] = {}
+        for camera_name, image_path in experiment.get("images", {}).items():
+            frame = cv2.imread(str(Path(image_path)))
+            if frame is None:
+                raise FileNotFoundError(f"Could not read evaluation image: {image_path}")
+            frames[camera_name] = frame
+        return frames
+
+    def _make_reference_display(
+        self,
+        live_frames: dict[str, np.ndarray],
+        reference_frames: dict[str, np.ndarray],
+        episode_idx: int,
+        episodes: int,
+    ) -> np.ndarray:
+        overlay_tiles = []
+        for camera_name in self.config.data.vision.cameras:
+            live_frame = live_frames.get(camera_name)
+            ref_frame = reference_frames.get(camera_name)
+            overlay_tiles.append(self._overlay_reference_frame(live_frame, ref_frame, camera_name))
+
+        overlay_row = np.hstack(overlay_tiles)
+
+        footer = np.zeros((44, overlay_row.shape[1], 3), dtype=np.uint8)
+        text = (
+            f"Align scene to target. enter/space: start  q/esc: abort  "
+            f"episode {episode_idx + 1}/{episodes}"
+        )
+        cv2.putText(
+            footer,
+            text,
+            (8, 28),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (255, 255, 255),
+            1,
+            cv2.LINE_AA,
+        )
+
+        width = max(overlay_row.shape[1], footer.shape[1])
+        return np.vstack(
+            [
+                self._pad_reference_width(overlay_row, width),
+                self._pad_reference_width(footer, width),
+            ]
+        )
+
+    def wait_for_experiment_setup(self, experiment: dict, episode_idx: int, episodes: int) -> None:
+        reference_frames = self._load_reference_frames(experiment)
+        cv2.namedWindow(EVALUATION_WINDOW_NAME, cv2.WINDOW_FULLSCREEN)
+        cv2.resizeWindow(EVALUATION_WINDOW_NAME, 1280, 720)
+        while True:
+            images = self.perception_system.cams.get()
+            live_frames = {
+                camera_name: images[ix]["color"]
+                for ix, camera_name in enumerate(self.config.data.vision.cameras)
+            }
+            cv2.imshow(
+                EVALUATION_WINDOW_NAME,
+                self._make_reference_display(
+                    live_frames,
+                    reference_frames,
+                    episode_idx,
+                    episodes,
+                ),
+            )
+            key = cv2.waitKey(1) & 0xFF
+            if key in (13, ord(" "), ord("s")):
+                break
+            if key in (ord("q"), 27):
+                raise KeyboardInterrupt("Evaluation aborted by user.")
+        cv2.destroyWindow(EVALUATION_WINDOW_NAME)
+
+    @staticmethod
+    def _prompt_experiment_success(episode_idx: int, episodes: int) -> bool:
+        while True:
+            response = input(
+                f"Did episode {episode_idx + 1}/{episodes} succeed? [y/n]: "
+            ).strip().lower()
+            if response in ("y", "yes"):
+                return True
+            if response in ("n", "no"):
+                return False
+            print("Please enter y or n.")
+
+    def _evaluation_results_path(self) -> Path:
+        return Path(f"saved_evaluation_media/{self.eval_name}/evaluation_results.json")
+
+    def _load_evaluation_results(self) -> list[dict]:
+        results_path = self._evaluation_results_path()
+        if not results_path.exists():
+            return []
+
+        with results_path.open("r") as f:
+            results = json.load(f)
+        if not isinstance(results, list):
+            raise ValueError(f"Evaluation results must be a list: {results_path}")
+        return results
+
+    def _save_evaluation_results(self, results: list[dict]) -> None:
+        results_path = self._evaluation_results_path()
+        with results_path.open("w") as f:
+            json.dump(results, f, indent=2)
+
+    @staticmethod
+    def _evaluation_result_ids(results: list[dict]) -> set[int]:
+        result_ids = set()
+        for result in results:
+            if "experiment_index" not in result:
+                continue
+            result_ids.add(int(result["experiment_index"]))
+        return result_ids
+
+    @staticmethod
+    def _confirm_duplicate_evaluation_results(
+        duplicate_ids: list[int],
+        results_path: Path,
+    ) -> None:
+        while True:
+            response = input(
+                f"Evaluation results already contain ids {duplicate_ids} in "
+                f"{results_path}. Append duplicate results? [y/N]: "
+            ).strip().lower()
+            if response in ("y", "yes"):
+                return
+            if response in ("", "n", "no"):
+                raise RuntimeError("Evaluation aborted to avoid duplicate result ids.")
+            print("Please enter y or n.")
+
+    @staticmethod
+    def _serialize_action_outputs(actions: np.ndarray) -> dict:
+        if actions.size == 0:
+            return {
+                "action_count": 0,
+                "action_poses": [],
+                "gripper_actions": [],
+                "progress_outputs": [],
+            }
+
+        positions = actions[:, :3]
+        rotations_6d = actions[:, 3:9]
+        quaternions = transform_utils.rotation_6d_to_quat(torch.from_numpy(rotations_6d)).numpy()
+        action_poses = [
+            {
+                "position": positions[i].tolist(),
+                "rotation_6d": rotations_6d[i].tolist(),
+                "quaternion": quaternions[i].tolist(),
+            }
+            for i in range(actions.shape[0])
+        ]
+        return {
+            "action_count": int(actions.shape[0]),
+            "action_poses": action_poses,
+            "gripper_actions": actions[:, -2].tolist(),
+            "progress_outputs": actions[:, -1].tolist(),
+        }
+
+    def run_evaluation_experiments(self, experiments: list[dict]):
+        """Run evaluation episodes guided by a saved experiment manifest."""
+        episodes = len(experiments)
+        results = self._load_evaluation_results()
+        existing_result_ids = self._evaluation_result_ids(results)
+        requested_ids = [
+            int(experiment.get("index", i))
+            for i, experiment in enumerate(experiments)
+        ]
+        duplicate_ids = sorted(set(requested_ids) & existing_result_ids)
+        if duplicate_ids:
+            self._confirm_duplicate_evaluation_results(
+                duplicate_ids,
+                self._evaluation_results_path(),
+            )
+
+        for i, experiment in enumerate(experiments):
+            self.idx = int(experiment.get("index", i))
+            print(f"Starting episode {i + 1}/{episodes}")
+            self.done = False
+            time.sleep(0.1)
+            self.robot.move_to_start(self.home_q)
+            self.wait_for_experiment_setup(experiment, i, episodes)
+            self.obs_deque.clear()
+            episode_log = self.inference_loop()
+            succeeded = self._prompt_experiment_success(i, episodes)
+            results.append(
+                {
+                    "episode": i,
+                    "experiment_index": self.idx,
+                    "success": succeeded,
+                    **episode_log,
+                }
+            )
+            self._save_evaluation_results(results)
             self.all_frames = defaultdict(list)
             print(f"Finished episode {i + 1}/{episodes}")
 
@@ -419,8 +772,7 @@ class RobotInferenceController:
         )
 
         start_time = time.time()
-
-        time.sleep(0.5)
+        start_perf = time.perf_counter()
 
         all_actions = np.zeros((0, self.config.action_shape))
 
@@ -448,31 +800,33 @@ class RobotInferenceController:
             rr.log("/action/gripper", rr.Scalars(action[0, -2].tolist()))
             rr.log("/action/progress", rr.Scalars(action[0, -1].tolist()))
 
-            action_horizon_len = int(len(action) / 2)
+            action_horizon_len = int(len(action))
             relative = self.config.data.action_relative
-            self.robot.set_next_waypoints(
+            waypoints = self.robot.get_next_waypoints(
                 n_trans[0:action_horizon_len],
                 n_quads[0:action_horizon_len],
                 relative=relative,
             )
-            for i in range(0, int(len(action) / 2)):
-                time.sleep(1 / DEFAULT_REFRESH_RATE_HZ)
+            for i in range(int(len(action))):
                 if action[i][-2] > GRIPPER_CLOSE_THRESHOLD:
                     self.robot.close_gripper()
                 else:
                     self.robot.open_gripper()
 
-            if progress[0] >= PROGRESS_COMPLETE_THRESHOLD:
-                self.robot.stop_motion()
-                obs_stream.dispose()
-                self.record_videos()
-                self.done = True
+                time.sleep(1 / DEFAULT_REFRESH_RATE_HZ)
+                self.robot.motion.set_next_waypoints([waypoints[i]])
+            
+                if progress[i] >= PROGRESS_COMPLETE_THRESHOLD:
+                    self.robot.stop_motion()
+                    obs_stream.dispose()
+                    self.record_videos()
+                    self.done = True
 
             elapsed_time = time.perf_counter() - infer_start_time
             rr.log("/debug/inference_time", rr.Scalars(elapsed_time))
-            remaining_time = target_dt - elapsed_time
-            if remaining_time > 0:
-                time.sleep(remaining_time)
+            # remaining_time = target_dt - elapsed_time
+            # if remaining_time > 0:
+            #     time.sleep(remaining_time)
 
             if (time.time() - start_time) > self.timeout:
                 print("Timeout reached, ending inference.")
@@ -483,6 +837,10 @@ class RobotInferenceController:
 
         assert self.robot.move_async is not None
         self.robot.move_async.join()
+        return {
+            "duration_seconds": time.perf_counter() - start_perf,
+            **self._serialize_action_outputs(all_actions),
+        }
 
     def convert_actions(self, action: np.ndarray) -> tuple[list[np.ndarray], np.ndarray, list[sm.SE3]]:
         """Convert action array to different pose representations.
