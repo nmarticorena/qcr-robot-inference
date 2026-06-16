@@ -9,7 +9,7 @@ import abc
 import pathlib
 import pickle as pkl
 from collections import defaultdict
-from typing import Callable, Optional, List
+from typing import Callable, Optional, List, Sequence, Self, Any
 import matplotlib.pyplot as plt
 import spatialmath as sm
 
@@ -21,7 +21,7 @@ import torchvision.transforms as transforms
 from numpy.typing import NDArray
 from torch.utils.data import Dataset
 
-from rs_imle_policy.configs.train_config import VisionConfig
+from rs_imle_policy.configs.train_config import VisionConfig, ExperimentConfig
 
 
 RAW_ORIENTATION_PREFIXES = ("orien_",)
@@ -34,7 +34,6 @@ class BaseDataset(Dataset, abc.ABC):
 
     This dataset loads and preprocesses demonstration data including robot states,
     actions, and multi-camera observations for training imitation learning policies.
-
     """
 
     def __init__(
@@ -50,8 +49,10 @@ class BaseDataset(Dataset, abc.ABC):
         visualize: bool = False,
         skip_normalization_keys: tuple[str, ...] = (),
         save_normalization_stats: Optional[bool] = None,
+        normalization_stats: Optional[dict[str, dict[str, NDArray]]] = None,
         normalize: bool = True,
         load_images: bool = True,
+        episode_names: Sequence[str | int] | None = None,
         action_mode: str = "absolute",
     ):
         self.dataset_path = dataset_path
@@ -69,6 +70,11 @@ class BaseDataset(Dataset, abc.ABC):
         self.load_images = load_images
         self.action_mode = action_mode
 
+        self.selected_episode_names = (
+            None if episode_names is None else tuple(str(episode) for episode in episode_names)
+        )
+
+
         self.transform = transform or transforms.Compose(
             [
                 transforms.ToPILImage(),
@@ -78,8 +84,15 @@ class BaseDataset(Dataset, abc.ABC):
         )
 
         self.rlds = self.create_rlds_dataset()
+        if not self.rlds:
+            raise ValueError("Dataset contains no episodes after filtering.")
+
         self.stats: dict[str, dict[str, NDArray]] = defaultdict(dict)
-        self.compute_normalization_stats()
+        if normalization_stats is None:
+            self.compute_normalization_stats()
+        else:
+            self.stats.update(normalization_stats)
+
         if self.save_normalization_stats:
             with open(self.dataset_path / "stats.pkl", "wb") as f:
                 pkl.dump(dict(self.stats), f)
@@ -94,8 +107,9 @@ class BaseDataset(Dataset, abc.ABC):
             assert self.cached_dataset is not None, "Failed to load cached dataset from HDF5 file."
 
         if not visualize:
-            self.low_dim_obs_shape = self.rlds[0]["state"].shape[1]
-            self.action_shape = self.rlds[0]["action"].shape[-1]
+            first_episode = next(iter(self.rlds))
+            self.low_dim_obs_shape = self.rlds[first_episode]["state"].shape[1]
+            self.action_shape = self.rlds[first_episode]["action"].shape[-1]
 
     def get_delta_transform(self, current_pose: List[NDArray], next_pose: List[NDArray]) -> List[sm.SE3]:
         """Compute delta transforms between consecutive poses.
@@ -165,7 +179,8 @@ class BaseDataset(Dataset, abc.ABC):
                 "max": np.concatenate(maxes, axis=0),
             }
 
-        for keys in self.rlds[0].keys():
+        first_episode = next(iter(self.rlds))
+        for keys in self.rlds[first_episode].keys():
             if keys == "state" and self.low_dim_obs_keys:
                 self.stats[keys] = get_composite_stats(self.low_dim_obs_keys)
             elif keys == "action" and self.action_keys:
@@ -343,6 +358,83 @@ class BaseDataset(Dataset, abc.ABC):
             "action": action,
             **frames,
         }
+
+    @classmethod
+    def from_config(
+        cls,
+        config:ExperimentConfig,
+        *,
+        episode_names: tuple[str, ...] | None = None,
+        normalization_stats: dict[str, Any] | None = None,
+        save_normalization_stats: bool | None = None,
+        **kwargs,
+    ) -> Self:
+        return cls(
+            config.dataset_path,
+            pred_horizon=config.model.pred_horizon,
+            obs_horizon=config.model.obs_horizon,
+            action_horizon=config.model.action_horizon,
+            low_dim_obs_keys=config.data.lowdim_obs_keys,
+            action_keys=config.data.action_keys,
+            vision_config=config.data.vision,
+            action_mode=config.data.action_mode,
+            episode_names=episode_names,
+            normalization_stats=normalization_stats,
+            save_normalization_stats=save_normalization_stats,
+            **kwargs,
+        )
+
+    @classmethod
+    def train_val(
+        cls,
+        config:ExperimentConfig,
+        *,
+        val_episode_count: int = 0,
+        **kwargs,
+    ) -> tuple[Self, Self | None]:
+        val_episode_count = getattr(config.data, "val_episode_count", val_episode_count)
+        if val_episode_count <= 0:
+            return cls.from_config(config, **kwargs), None
+        train_episodes, val_episodes = split_episode_names(
+            config.dataset_path,
+            val_episode_count=val_episode_count,
+        )
+
+        train_dataset = cls.from_config(
+            config,
+            episode_names=train_episodes,
+            **kwargs,
+        )
+
+        val_dataset = cls.from_config(
+            config,
+            episode_names=val_episodes,
+            normalization_stats=train_dataset.stats,
+            save_normalization_stats=False,
+            **kwargs,
+        )
+
+        return train_dataset, val_dataset
+
+def split_episode_names(dataset_path:pathlib.Path, val_episode_count:int):
+    episode_dir = dataset_path / "episodes"
+    episode_names = sorted(
+        [p.name for p in episode_dir.iterdir() if p.is_dir()],
+        key = int,
+    )
+    if val_episode_count < 1:
+            raise ValueError("val_episode_count must be at least 1.")
+
+    if len(episode_names) <= val_episode_count:
+        raise ValueError(
+            f"Need more than {val_episode_count} episodes to create a train/val split; "
+            f"found {len(episode_names)}."
+        )
+
+    return (
+        tuple(episode_names[:-val_episode_count]),
+        tuple(episode_names[-val_episode_count:]),
+    )
 
 
 def get_data_stats(data: NDArray) -> dict:
