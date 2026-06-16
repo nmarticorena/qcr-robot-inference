@@ -254,6 +254,7 @@ class OptimConfig:
 @dataclass
 class BaseModel:
     """Base model with common attributes between methods"""
+    name: str = "base_model"
 
     device: Literal["cuda", "cpu"] = "cuda"
 
@@ -300,9 +301,9 @@ class Diffusion(BaseModel):
 class ExperimentConfig:
     """Main training configuration"""
 
-    exp_name: str
     dataset_path: pathlib.Path
-    model: Diffusion | RSIMLE | FlowMatching
+    model: BaseModel = field(default_factory = BaseModel())
+    exp_name: str = "test"
     task_name: str = "default"
     debug: bool = False
 
