@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 import pathlib
-from pathlib import Path
 from typing import Literal, Optional
 
 
@@ -93,6 +92,21 @@ class G1VisionConfig(VisionConfig):
     """Vision configuration for G1 dataset"""
 
     cameras: tuple[str, ...] = ("color_0",)
+
+    def __post_init__(self):
+        return
+
+
+@dataclass
+class PushTVisionConfig(VisionConfig):
+    """Vision configuration for PushT dataset"""
+
+    cameras: tuple[str, ...] = ("frames",)
+    img_shape: tuple[int, int] = (96, 96)
+    center_crop: tuple[int, int] = (96, 96)
+    
+    def __post_init__(self):
+        return 
 
 
 @dataclass
@@ -206,6 +220,15 @@ class G1RightArmDataConfig(DataConfig):
     )
 
     vision: VisionConfig = field(default_factory=G1VisionConfig)
+
+
+@dataclass
+class PushTDataConfig(DataConfig):
+    """Data configuration for PushT dataset"""
+
+    lowdim_obs_keys: tuple[str, ...] = ()
+    action_keys: tuple[str, ...] = ()
+    vision: VisionConfig = field(default_factory=PushTVisionConfig)
 
 
 @dataclass

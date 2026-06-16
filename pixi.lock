@@ -123,7 +123,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gxx-9.5.0-h1fea6ba_13.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gxx_impl_linux-64-9.5.0-h99780fb_19.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/gxx_linux-64-9.5.0-h43f449f_13.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/gymnasium-1.2.3-np2py311hec5889a_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/gymnasium-1.3.0-np2py311hec5889a_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/h5py-3.15.1-nompi_py311h0b2f468_101.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/harfbuzz-13.2.0-h6083320_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/hdf4-4.2.15-h2a13503_7.conda
@@ -389,7 +389,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pandas-3.0.1-py311h8032f78_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pango-1.56.4-hadf4263_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pcre2-10.47-haa7fec5_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/pillow-12.1.1-py311hf88fc01_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/pillow-10.4.0-py311h4aec55e_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pinocchio-3.9.0-h38be061_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pinocchio-python-3.9.0-py311h5fe6122_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pixman-0.46.4-h54a6638_1.conda
@@ -614,6 +614,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/hyperframe-6.1.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/idna-3.11-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/imageio-2.37.0-pyhfb79c49_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/imageio-ffmpeg-0.6.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/importlib-metadata-8.8.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/importlib-resources-6.5.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/importlib_resources-6.5.2-pyhd8ed1ab_0.conda
@@ -656,6 +657,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/mdurl-0.1.2-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/mergedeep-1.3.4-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/mistune-3.2.0-pyhcf101f3_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/moviepy-2.2.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/mpmath-1.4.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/munkres-1.1.4-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/mypy_extensions-1.1.0-pyha770c72_0.conda
@@ -686,6 +688,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pluggy-1.6.0-pyhf9edf01_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ply-3.11-pyhd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/poppler-data-0.4.12-hd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/proglog-0.1.10-pyhaa61c55_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/prometheus_client-0.24.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/prompt-toolkit-3.0.52-pyha770c72_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/prompt_toolkit-3.0.52-hd8ed1ab_0.conda
@@ -711,6 +714,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyserial-3.5-pyhcf101f3_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyha55dd90_7.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-2.9.0.post0-pyhe01879c_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/python-dotenv-1.2.2-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-fastjsonschema-2.21.2-pyhe01879c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-gil-3.11.15-hd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/python-json-logger-2.0.7-pyhd8ed1ab_0.conda
@@ -788,13 +792,12 @@ environments:
       - conda: https://conda.anaconda.org/nmarticorena/linux-64/unitree_sdk2py-1.0.1-py311h48b7412_8.conda
       - pypi: .
       - pypi: ../motion_tools/
-      - pypi: git+https://github.com/nmarticorena/frankx.git?rev=legacy_version#19a14b078d4b3a5c68f02538f5575fa7935f0936
-      - pypi: git+https://github.com/nmarticorena/robotics-toolbox-python.git#d0716acd762725baf47dadb1709b3781f7db05f3
-      - pypi: git+https://github.com/nmarticorena/spatialgeometry.git#1a25c5cfbd36702bdf495068039fb6ab780d911e
-      - pypi: git+https://github.com/nmarticorena/spatialmath-python.git#e18684da6fe4a76625aef65d38f107ee451d037a
-      - pypi: git+https://github.com/nmarticorena/swift.git#0a8900c01736db66cc5457eaef50495b776e54ff
-      - pypi: git+https://github.com/nmarticorena/teleimager.git?rev=ed0c8d3#ed0c8d39de62e32a5c0bdb4d6e4b2d970335d67b
-      - pypi: https://files.pythonhosted.org/packages/03/43/00e9f7a133ef5fb30dab75e8c39b0fd9640129ed52c8202a86ef7aaf4363/pyribbit-0.1.46-py3-none-any.whl
+      - pypi: git+https://github.com/nmarticorena/frankx?rev=legacy_version#19a14b078d4b3a5c68f02538f5575fa7935f0936
+      - pypi: git+https://github.com/nmarticorena/robotics-toolbox-python#d0716acd762725baf47dadb1709b3781f7db05f3
+      - pypi: git+https://github.com/nmarticorena/spatialgeometry#1a25c5cfbd36702bdf495068039fb6ab780d911e
+      - pypi: git+https://github.com/nmarticorena/spatialmath-python#e18684da6fe4a76625aef65d38f107ee451d037a
+      - pypi: git+https://github.com/nmarticorena/swift#0a8900c01736db66cc5457eaef50495b776e54ff
+      - pypi: git+https://github.com/nmarticorena/teleimager?rev=ed0c8d3#ed0c8d39de62e32a5c0bdb4d6e4b2d970335d67b
       - pypi: https://files.pythonhosted.org/packages/28/3f/3fd093a11abd2a402d47b0783986c2811c23edcfbd7a75655ab8fb609f3a/ansitable-0.11.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/33/6b/e0547afaf41bf2c42e52430072fa5658766e3d65bd4b03a563d1b6336f57/distlib-0.4.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/42/59/123aee44a039b212cfb8d90be1adf06496a99b313ee1683aadf90b3d9799/progress-1.6.1-py3-none-any.whl
@@ -811,7 +814,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/db/3c/33bac158f8ab7f89b2e59426d5fe2e4f63f7ed25df84c036890172b412b5/cfgv-3.5.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e2/7a/cba41bab339a8f9d02767f1ed1493e920d160c938bb09a52f54891c49368/panda_python-0.8.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e4/33/58702880fe6bb3ed91cb21e1c92b002f9b73e32c0c5e3e9e2c0a94eaac61/colored-2.3.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ea/18/c7b57e20df0ecf19c0512d513dccdffccc8ccfdefaabe4150f2609f5e9a0/urchin-0.0.30-py3-none-any.whl
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-7_kmp_llvm.conda
   build_number: 7
@@ -2469,23 +2471,23 @@ packages:
   purls: []
   size: 28402
   timestamp: 1682617696817
-- conda: https://conda.anaconda.org/conda-forge/linux-64/gymnasium-1.2.3-np2py311hec5889a_0.conda
-  sha256: 345bc6530f37747446df8a424420e45e0e3a9d4bd5b8af91f8981186458bd526
-  md5: fe95e292ebb250ce594bc0409320f842
+- conda: https://conda.anaconda.org/conda-forge/linux-64/gymnasium-1.3.0-np2py311hec5889a_1.conda
+  sha256: 2c8ffcd49c844d87780745a01a08d63ab90c822e03a21a1603566dc9c937078a
+  md5: d6623a5018749bb8fcccc76c793d96f2
   depends:
   - python
   - cloudpickle >=1.2.0
   - farama-notifications
   - jax-jumpy >=1.0.0
   - typing_extensions >=4.3.0
-  - python_abi 3.11.* *_cp311
   - numpy >=1.23,<3
+  - python_abi 3.11.* *_cp311
   license: MIT
   license_family: MIT
   purls:
   - pkg:pypi/gymnasium?source=hash-mapping
-  size: 1138374
-  timestamp: 1769938728414
+  size: 1139316
+  timestamp: 1779989108164
 - conda: https://conda.anaconda.org/conda-forge/linux-64/h5py-3.15.1-nompi_py311h0b2f468_101.conda
   sha256: 6bf4f9a6ab5ccbfd8a2a6f130d5c14cb12f77ada367d3fa7724cd2f6515bddab
   md5: 1ce254e09ec4982ed0334e5e6f113e1c
@@ -6406,29 +6408,28 @@ packages:
   purls: []
   size: 1222481
   timestamp: 1763655398280
-- conda: https://conda.anaconda.org/conda-forge/linux-64/pillow-12.1.1-py311hf88fc01_0.conda
-  sha256: 19b4633f001889309a9d7ad12f4a89c27bad1f268722e6e50a7d9da64773f5fc
-  md5: 0415141f4e3d4dad3c39ad4718936352
+- conda: https://conda.anaconda.org/conda-forge/linux-64/pillow-10.4.0-py311h4aec55e_1.conda
+  sha256: 22d2da0c005231fc264984d2886c2ee66300744408657c380c38fe3e6388fdad
+  md5: 4484d021b3bf4938b8c75fe418bfd27b
   depends:
-  - python
-  - libgcc >=14
   - __glibc >=2.17,<3.0.a0
+  - freetype >=2.12.1,<3.0a0
+  - lcms2 >=2.16,<3.0a0
+  - libgcc >=13
+  - libjpeg-turbo >=3.0.0,<4.0a0
+  - libtiff >=4.6.0,<4.8.0a0
+  - libwebp-base >=1.4.0,<2.0a0
+  - libxcb >=1.16,<2.0.0a0
+  - libzlib >=1.3.1,<2.0a0
+  - openjpeg >=2.5.2,<3.0a0
+  - python >=3.11,<3.12.0a0
   - python_abi 3.11.* *_cp311
-  - libwebp-base >=1.6.0,<2.0a0
   - tk >=8.6.13,<8.7.0a0
-  - openjpeg >=2.5.4,<3.0a0
-  - libxcb >=1.17.0,<2.0a0
-  - libtiff >=4.7.1,<4.8.0a0
-  - zlib-ng >=2.3.3,<2.4.0a0
-  - lcms2 >=2.18,<3.0a0
-  - libfreetype >=2.14.1
-  - libfreetype6 >=2.14.1
-  - libjpeg-turbo >=3.1.2,<4.0a0
   license: HPND
   purls:
   - pkg:pypi/pillow?source=hash-mapping
-  size: 1046996
-  timestamp: 1770794002405
+  size: 42313057
+  timestamp: 1726075231648
 - conda: https://conda.anaconda.org/conda-forge/linux-64/pinocchio-3.9.0-h38be061_2.conda
   sha256: 50268509ca935bd0f5704f5db5429836b5da26459c9c4885506dd74a4d793945
   md5: ee90179634810d9290486a39e6135638
@@ -9819,6 +9820,18 @@ packages:
   - pkg:pypi/imageio?source=hash-mapping
   size: 293226
   timestamp: 1738273949742
+- conda: https://conda.anaconda.org/conda-forge/noarch/imageio-ffmpeg-0.6.0-pyhd8ed1ab_0.conda
+  sha256: a20c885ff2e76d562c0a84655d735e279091a14f1c2813b23abb706c21772077
+  md5: 92c5d3f3f6c86a1f45a5c3e70c777801
+  depends:
+  - ffmpeg
+  - python >=3.9
+  - setuptools
+  license: BSD 2-Clause
+  purls:
+  - pkg:pypi/imageio-ffmpeg?source=hash-mapping
+  size: 21312
+  timestamp: 1737102760118
 - conda: https://conda.anaconda.org/conda-forge/noarch/importlib-metadata-8.8.0-pyhcf101f3_0.conda
   sha256: 82ab2a0d91ca1e7e63ab6a4939356667ef683905dea631bc2121aa534d347b16
   md5: 080594bf4493e6bae2607e65390c520a
@@ -10438,6 +10451,27 @@ packages:
   - pkg:pypi/mistune?source=hash-mapping
   size: 74250
   timestamp: 1766504456031
+- conda: https://conda.anaconda.org/conda-forge/noarch/moviepy-2.2.1-pyhd8ed1ab_0.conda
+  sha256: 0325dd47cdc7deda1de7db29c20cd28b7a352b68c03ffab5ac14e74a4391e001
+  md5: 07730e0bf6920efafd12de3476b12ffe
+  depends:
+  - decorator >=4.0.2,<6.0
+  - ffmpeg
+  - imageio >=2.5,<3.0
+  - imageio-ffmpeg >=0.2.0
+  - numpy
+  - pillow <11.0,>=9.2.0
+  - proglog <=1.0.0
+  - python >=3.10
+  - python-dotenv
+  - requests >=2.8.1,<3.0
+  - tqdm >=4.11.2,<5.0
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/moviepy?source=hash-mapping
+  size: 96880
+  timestamp: 1769968153576
 - conda: https://conda.anaconda.org/conda-forge/noarch/mpmath-1.4.1-pyhd8ed1ab_0.conda
   sha256: 5bbf2f8179ec43d34d67ca8e4989d216c1bdb4b749fe6cb40e86ebf88c1b5300
   md5: 2e81b32b805f406d23ba61938a184081
@@ -10837,6 +10871,18 @@ packages:
   purls: []
   size: 2348171
   timestamp: 1675353652214
+- conda: https://conda.anaconda.org/conda-forge/noarch/proglog-0.1.10-pyhaa61c55_0.conda
+  sha256: b146d94eba09f718a828251023bfc4cd7764554d09d116d5ee36d7b5bde4f875
+  md5: 22122ee306c0cee77e9313614d602856
+  depends:
+  - python >=3.6
+  - tqdm
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/proglog?source=hash-mapping
+  size: 12053
+  timestamp: 1728453004124
 - conda: https://conda.anaconda.org/conda-forge/noarch/prometheus_client-0.24.1-pyhd8ed1ab_0.conda
   sha256: 75b2589159d04b3fb92db16d9970b396b9124652c784ab05b66f584edc97f283
   md5: 7526d20621b53440b0aae45d4797847e
@@ -11156,6 +11202,17 @@ packages:
   - pkg:pypi/python-dateutil?source=hash-mapping
   size: 233310
   timestamp: 1751104122689
+- conda: https://conda.anaconda.org/conda-forge/noarch/python-dotenv-1.2.2-pyhcf101f3_0.conda
+  sha256: 74e417a768f59f02a242c25e7db0aa796627b5bc8c818863b57786072aeb85e5
+  md5: 130584ad9f3a513cdd71b1fdc1244e9c
+  depends:
+  - python >=3.10
+  license: BSD-3-Clause
+  license_family: BSD
+  purls:
+  - pkg:pypi/python-dotenv?source=hash-mapping
+  size: 27848
+  timestamp: 1772388605021
 - conda: https://conda.anaconda.org/conda-forge/noarch/python-fastjsonschema-2.21.2-pyhe01879c_0.conda
   sha256: df9aa74e9e28e8d1309274648aac08ec447a92512c33f61a8de0afa9ce32ebe8
   md5: 23029aae904a2ba587daba708208012f
@@ -12161,13 +12218,13 @@ packages:
   - scipy>=1.15.0,<2
   - spatialmath-python
   - tyro>=1.0.6,<2
-  - urchin
+  - urdfpy>=0.0.22,<0.0.23
   requires_python: '>=3.10.0,<3.15'
-- pypi: git+https://github.com/nmarticorena/frankx.git?rev=legacy_version#19a14b078d4b3a5c68f02538f5575fa7935f0936
+- pypi: git+https://github.com/nmarticorena/frankx?rev=legacy_version#19a14b078d4b3a5c68f02538f5575fa7935f0936
   name: frankx
   version: 0.1.1
   requires_python: '>=3.6'
-- pypi: git+https://github.com/nmarticorena/robotics-toolbox-python.git#d0716acd762725baf47dadb1709b3781f7db05f3
+- pypi: git+https://github.com/nmarticorena/robotics-toolbox-python#d0716acd762725baf47dadb1709b3781f7db05f3
   name: roboticstoolbox-python
   version: 2.0.0
   requires_dist:
@@ -12199,7 +12256,7 @@ packages:
   - sphinx-autodoc-typehints ; extra == 'docs'
   - sphinx-favicon ; extra == 'docs'
   requires_python: '>=3.7'
-- pypi: git+https://github.com/nmarticorena/spatialgeometry.git#1a25c5cfbd36702bdf495068039fb6ab780d911e
+- pypi: git+https://github.com/nmarticorena/spatialgeometry#1a25c5cfbd36702bdf495068039fb6ab780d911e
   name: spatialgeometry
   version: 2.0.0
   requires_dist:
@@ -12216,7 +12273,7 @@ packages:
   - sphinx-rtd-theme ; extra == 'docs'
   - sphinx-autorun ; extra == 'docs'
   requires_python: '>=3.7'
-- pypi: git+https://github.com/nmarticorena/spatialmath-python.git#e18684da6fe4a76625aef65d38f107ee451d037a
+- pypi: git+https://github.com/nmarticorena/spatialmath-python#e18684da6fe4a76625aef65d38f107ee451d037a
   name: spatialmath-python
   version: 2.0.0
   requires_dist:
@@ -12241,7 +12298,7 @@ packages:
   - matplotlib==3.5.1 ; extra == 'ros-humble'
   - numpy<2 ; extra == 'ros-humble'
   requires_python: '>=3.7'
-- pypi: git+https://github.com/nmarticorena/swift.git#0a8900c01736db66cc5457eaef50495b776e54ff
+- pypi: git+https://github.com/nmarticorena/swift#0a8900c01736db66cc5457eaef50495b776e54ff
   name: swift-sim
   version: 2.0.0
   requires_dist:
@@ -12263,7 +12320,7 @@ packages:
   - ipython ; extra == 'nb'
   - notebook ; extra == 'nb'
   requires_python: '>=3.7'
-- pypi: git+https://github.com/nmarticorena/teleimager.git?rev=ed0c8d3#ed0c8d39de62e32a5c0bdb4d6e4b2d970335d67b
+- pypi: git+https://github.com/nmarticorena/teleimager?rev=ed0c8d3#ed0c8d39de62e32a5c0bdb4d6e4b2d970335d67b
   name: teleimager
   version: 1.5.0
   requires_dist:
@@ -12276,29 +12333,6 @@ packages:
   - aiortc ; extra == 'server'
   - pupil-labs-uvc ; extra == 'server'
   requires_python: '>=3.8,<3.12'
-- pypi: https://files.pythonhosted.org/packages/03/43/00e9f7a133ef5fb30dab75e8c39b0fd9640129ed52c8202a86ef7aaf4363/pyribbit-0.1.46-py3-none-any.whl
-  name: pyribbit
-  version: 0.1.46
-  sha256: 0d4943f7cc6903f20ef42787e9357d7bb25c95f2c04da9dfa1a8021bdf9e0ab6
-  requires_dist:
-  - freetype-py
-  - imageio
-  - networkx
-  - numpy
-  - pillow
-  - pyglet>=1.4.10
-  - pyopengl>=3.1.0
-  - scipy
-  - six
-  - trimesh
-  - flake8 ; extra == 'dev'
-  - pre-commit ; extra == 'dev'
-  - pytest ; extra == 'dev'
-  - pytest-cov ; extra == 'dev'
-  - tox ; extra == 'dev'
-  - sphinx ; extra == 'docs'
-  - sphinx-rtd-theme ; extra == 'docs'
-  - sphinx-automodapi ; extra == 'docs'
 - pypi: https://files.pythonhosted.org/packages/28/3f/3fd093a11abd2a402d47b0783986c2811c23edcfbd7a75655ab8fb609f3a/ansitable-0.11.5-py3-none-any.whl
   name: ansitable
   version: 0.11.5
@@ -12472,26 +12506,4 @@ packages:
   name: colored
   version: 2.3.1
   sha256: 15d85396d6841f79534bf4668330b5e8686a5e58e730c84ada0e09d335b21fd1
-  requires_python: '>=3.9'
-- pypi: https://files.pythonhosted.org/packages/ea/18/c7b57e20df0ecf19c0512d513dccdffccc8ccfdefaabe4150f2609f5e9a0/urchin-0.0.30-py3-none-any.whl
-  name: urchin
-  version: 0.0.30
-  sha256: d27175e81a8ab348eaeda004225c88b926c809a92e297134cb4c64b6e0f78bf6
-  requires_dist:
-  - lxml
-  - networkx
-  - numpy>=1.20
-  - pillow
-  - pycollada>=0.6
-  - pyribbit>=0.1.46
-  - scipy
-  - trimesh
-  - flake8 ; extra == 'dev'
-  - pre-commit ; extra == 'dev'
-  - pytest ; extra == 'dev'
-  - pytest-cov ; extra == 'dev'
-  - tox ; extra == 'dev'
-  - sphinx ; extra == 'docs'
-  - sphinx-rtd-theme ; extra == 'docs'
-  - sphinx-automodapi ; extra == 'docs'
   requires_python: '>=3.9'
