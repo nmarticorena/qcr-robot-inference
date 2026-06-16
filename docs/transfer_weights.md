@@ -12,7 +12,7 @@ The available options are:
 │ --epochs [INT [INT ...]]                                              │
 │                    (default: 350 750)                                 │
 │ --include-last, --no-include-last                                     │
-│                    (default: True)                                    │
+│                    (default: False)                                    │
 ╰───────────────────────────────────────────────────────────────────────╯
 ```
 
