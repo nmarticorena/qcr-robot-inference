@@ -6,6 +6,7 @@ for training robot manipulation policies from demonstrations.
 
 import json
 import os
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
@@ -92,10 +93,21 @@ class PandaPolicyDataset(BaseDataset):
             os.listdir(os.path.join(self.dataset_path, "episodes")),
             key=int,
         )
-        self.episode_names = episodes
-        self.episode_name_to_index = {episode: episode_index for episode_index, episode in enumerate(episodes)}
+        if self.selected_episode_names is not None:
+            requested_episodes = set(self.selected_episode_names)
+            missing_episodes = sorted(requested_episodes.difference(episodes), key=int)
+            if missing_episodes:
+                raise ValueError(
+                    "Requested episode folders were not found: "
+                    + ", ".join(missing_episodes)
+                )
+            episodes = [episode for episode in episodes if episode in requested_episodes]
 
-        for episode_index, episode in enumerate(episodes):
+        self.episode_names = episodes
+        self.episode_name_to_index = {episode: int(episode) for episode in episodes}
+
+        for episode in episodes:
+            episode_index = int(episode)
             episode_path = os.path.join(self.dataset_path, "episodes", episode, "state.json")
 
             with open(episode_path, "r") as f:
