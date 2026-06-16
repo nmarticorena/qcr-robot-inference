@@ -52,6 +52,7 @@ class BaseDataset(Dataset, abc.ABC):
         save_normalization_stats: Optional[bool] = None,
         normalize: bool = True,
         load_images: bool = True,
+        action_mode: str = "absolute",
     ):
         self.dataset_path = dataset_path
         self.pred_horizon = pred_horizon
@@ -66,6 +67,7 @@ class BaseDataset(Dataset, abc.ABC):
         self.save_normalization_stats = not visualize if save_normalization_stats is None else save_normalization_stats
         self.normalize = normalize
         self.load_images = load_images
+        self.action_mode = action_mode
 
         self.transform = transform or transforms.Compose(
             [
@@ -93,23 +95,42 @@ class BaseDataset(Dataset, abc.ABC):
 
         if not visualize:
             self.low_dim_obs_shape = self.rlds[0]["state"].shape[1]
-            self.action_shape = self.rlds[0]["action"].shape[1]
+            self.action_shape = self.rlds[0]["action"].shape[-1]
 
-    def get_relative_transform(self, current_pose: List[NDArray], next_pose: List[NDArray]) -> List[sm.SE3]:
-        """Compute relative transformation between consecutive poses.
+    def get_delta_transform(self, current_pose: List[NDArray], next_pose: List[NDArray]) -> List[sm.SE3]:
+        """Compute delta transforms between consecutive poses.
 
         Args:
             current_pose: List of current pose matrices
             next_pose: List of next pose matrices
 
         Returns:
-            List of relative transformations as SE3 objects
+            List of delta transformations as SE3 objects
         """
         current_pose_sm = [sm.SE3(pose) for pose in current_pose]
         next_pose_sm = [sm.SE3(pose) for pose in next_pose]
 
-        relative_transform = [current.inv() * nxt for current, nxt in zip(current_pose_sm, next_pose_sm)]
-        return relative_transform
+        delta_transform = [current.inv() * nxt for current, nxt in zip(current_pose_sm, next_pose_sm)]
+        return delta_transform
+
+    def get_relative_transform(self, current_pose: List[NDArray], next_pose: List[NDArray]) -> List[sm.SE3]:
+        """Compatibility alias for the old consecutive-step relative transform."""
+        return self.get_delta_transform(current_pose, next_pose)
+
+    def get_relative_horizon_transform(self, poses: List[NDArray]) -> NDArray:
+        """Compute horizon targets relative to the anchor observation pose."""
+        pose_sm = [sm.SE3(pose) for pose in poses]
+        last_idx = len(pose_sm) - 1
+        relative_horizon = []
+        for sample_idx in range(len(pose_sm)):
+            anchor_idx = min(sample_idx + self.obs_horizon - 1, last_idx)
+            anchor_inv = pose_sm[anchor_idx].inv()
+            sample_transforms = []
+            for horizon_idx in range(self.pred_horizon):
+                target_idx = min(sample_idx + horizon_idx + 1, last_idx)
+                sample_transforms.append((anchor_inv * pose_sm[target_idx]).A)
+            relative_horizon.append(sample_transforms)
+        return np.asarray(relative_horizon)
 
     @abc.abstractmethod
     def create_rlds_dataset(self) -> dict[int, dict[str, NDArray]]:
@@ -124,8 +145,10 @@ class BaseDataset(Dataset, abc.ABC):
                 axis=0,
             )
 
-        def get_key_stats(key: str) -> dict:
+        def get_key_stats(key: str, *, flatten_leading: bool = False) -> dict:
             data = get_data(key)
+            if flatten_leading and data.ndim > 2:
+                data = data.reshape(-1, data.shape[-1])
             if self.skip_normalization(key):
                 return get_identity_data_stats(data)
             return get_data_stats(data)
@@ -134,7 +157,7 @@ class BaseDataset(Dataset, abc.ABC):
             mins = []
             maxes = []
             for key in keys:
-                key_stats = get_key_stats(key)
+                key_stats = get_key_stats(key, flatten_leading=True)
                 mins.append(np.asarray(key_stats["min"]).reshape(-1))
                 maxes.append(np.asarray(key_stats["max"]).reshape(-1))
             return {
@@ -219,6 +242,27 @@ class BaseDataset(Dataset, abc.ABC):
         """
         return np.linspace(0, 1, length)
 
+    def build_action_array(self, episode_data: dict[str, NDArray]) -> NDArray:
+        """Build the model action array from configured action keys."""
+        action_parts = []
+        for key in self.action_keys:
+            values = np.asarray(episode_data[key])
+            if self.action_mode == "relative":
+                values = self.expand_to_action_horizon(values)
+            action_parts.append(values)
+        return np.concatenate(action_parts, axis=-1)
+
+    def expand_to_action_horizon(self, values: NDArray) -> NDArray:
+        """Expand per-timestep actions to one horizon action per sample start."""
+        if values.ndim == 3:
+            return values
+
+        length = values.shape[0]
+        horizon_offsets = np.arange(self.pred_horizon)
+        sample_offsets = np.arange(length)[:, None]
+        indices = np.minimum(sample_offsets + horizon_offsets, length - 1)
+        return values[indices]
+
     def visualize_images_in_row(self, tensor: torch.Tensor):
         """Visualize a batch of images in a single row.
 
@@ -250,10 +294,17 @@ class BaseDataset(Dataset, abc.ABC):
         frames = self.read_video_frames(episode, buffer_start_idx, buffer_end_idx)
 
         robot_state = self.rlds[episode]["state"][buffer_start_idx:buffer_end_idx]
-        robot_action = self.rlds[episode]["action"][buffer_start_idx:buffer_end_idx]
+        robot_action = self.sample_action_sequence(episode, buffer_start_idx, buffer_end_idx)
 
         seq = {"state": robot_state, "action": robot_action, "frames": frames}
         return seq
+
+    def sample_action_sequence(self, episode: int, buffer_start_idx: int, buffer_end_idx: int) -> NDArray:
+        """Return the action tensor for a sampled training window."""
+        robot_action = self.rlds[episode]["action"]
+        if robot_action.ndim == 3:
+            return robot_action[buffer_start_idx]
+        return robot_action[buffer_start_idx:buffer_end_idx]
 
     def __len__(self) -> int:
         """Get the number of samples in the dataset.

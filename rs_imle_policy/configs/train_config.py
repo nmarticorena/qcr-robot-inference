@@ -126,6 +126,7 @@ class DataConfig:
 
     # Whether actions are relative to current pose
     action_relative: bool = False
+    action_mode: Literal["absolute", "delta", "relative"] = "absolute"
 
     use_next_state: bool = True
     # Whether to use the next_state or the leader position
@@ -135,7 +136,7 @@ class DataConfig:
 
     def get_name(self) -> str:
         string = ""
-        string += "ra" if self.action_relative else "aa"
+        string += self.action_mode
         string += "_next" if self.use_next_state else "_leader"
         string += "_" + "_".join(self.vision.cameras) 
         return string
@@ -295,22 +296,6 @@ class ExperimentConfig:
         name += self.exp_name
         return name
 
-
-@dataclass
-class LoaderConfig:
-    """Configuration for data loading"""
-    path: Path
-    epoch: Optional[int] = None
-    timeout: int = 60  # Timeout for experiment in seconds
-    episodes: int = 10  # exclusive max episode id to run
-    initial_id: int = 0  # first episode/experiment id to run
-    evaluation_path: Optional[Path] = None
-    repeat_experiment_id: Optional[int] = None  # experiment id to repeat
-    n_samples: int = 10  # total repeated-evaluation samples to collect
-    silent_rerun: bool = True  # Whether to open or not the current rerun recording
-    exp_name: Optional[str] = None
-    dry_run: bool = False
-    traj_consistency: bool = False # Only valid for RS-IMLE
 
 
 if __name__ == "__main__":

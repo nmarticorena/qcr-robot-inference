@@ -13,6 +13,7 @@ from rs_imle_policy.configs.franka.evaluation import EvaluationConfig
 from rs_imle_policy.inference import PerceptionSystem
 from rs_imle_policy.robots.panda import FrankxRobot
 from rs_imle_policy.visualizer.eval_utils import mean_image
+from rs_imle_policy.configs.panda_configs import SinglePandaConfig
 
 
 FRANKA_HOME = np.deg2rad([0.0, 0.0, 0.0, -90.0, 0.0, 90.0, 45.0])
@@ -202,7 +203,8 @@ def get_average_home(dataset_path: Path) -> None:
 
 def main(args: EvaluationConfig) -> None:
     output_dir = args.output_dir / args.task_name
-    robot = FrankxRobot(ip=args.robot_ip)
+    config = SinglePandaConfig(robot_ip=args.robot_ip)
+    robot = FrankxRobot(config)
     perception = PerceptionSystem(args.vision)
     experiments: list[dict] = []
     snapshot_frames = {camera_name: [] for camera_name in args.vision.cameras}

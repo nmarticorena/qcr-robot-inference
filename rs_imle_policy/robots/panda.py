@@ -49,7 +49,7 @@ class FrankxRobot(BaseRobot):
             dynamic_rel: Dynamic scaling factor for robot motion
         """
 
-        self.config = config
+        self.config:SinglePandaConfig = config
         self.robot = Robot(config.robot_ip, 
                            dynamic_rel=config.dynamic_rel, 
                            repeat_on_error=config.repeat_on_error)
@@ -93,6 +93,23 @@ class FrankxRobot(BaseRobot):
         if home_config is not None:
             self.robot.move(JointMotion(target=home_config))
         self.open_gripper()
+
+    def check_home(self, home_config: Optional[NDArray], threshold: float = 0.1) -> bool:
+        """Check if robot is at home configuration.
+
+        Args:
+            home_config: Joint configuration for home position
+            threshold: Maximum allowed distance from home configuration
+
+        Returns:
+            True if robot is within threshold distance of home configuration, False otherwise
+        """
+        if home_config is None:
+            return True
+        current_state = self.robot.read_once()
+        current_q = np.array(current_state.q)
+        distance = np.linalg.norm(current_q - home_config)
+        return distance < threshold
 
     def close_gripper(self):
         """Close the gripper if not already closed."""
@@ -276,7 +293,7 @@ class PandaPyRobot:
         self.pos = self.X_BE[:3, 3]
         self.rot = self.X_BE[:3, :3]
         self.move_async = None
-        self.config = config
+        self.config:SinglePandaConfig = config
 
     def get_gripper_state(self) -> float:
         """Get current gripper width.
@@ -297,6 +314,24 @@ class PandaPyRobot:
         if home_config is not None:
             self.robot.move_to_joint_position(home_config)
         self.open_gripper()
+
+    def check_home(self, home_config: Optional[NDArray], threshold: float = 0.1) -> bool:
+        """Check if robot is at home configuration.
+
+        Args:
+            home_config: Joint configuration for home position
+            threshold: Maximum allowed distance from home configuration
+
+        Returns:
+            True if robot is within threshold distance of home configuration, False otherwise
+        """
+        if home_config is None:
+            return True
+        current_state = self.robot.get_robot().read_once()
+        current_q = np.array(current_state.q)
+        distance = np.linalg.norm(current_q - home_config)
+        return distance < threshold
+       
 
     def close_gripper(self):
         """Close the gripper if not already closed."""

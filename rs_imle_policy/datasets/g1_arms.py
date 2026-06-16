@@ -131,8 +131,10 @@ class G1ArmsDataset(BaseDataset):
                 # ]
                 # X_BE_next.append(X_BE_next[-1])
 
-            relative_transform_left = self.get_relative_transform(left_hand_X_BE_current, left_hand_X_BE_next)
-            relative_transform_right = self.get_relative_transform(right_hand_X_BE_current, right_hand_X_BE_next)
+            delta_transform_left = self.get_delta_transform(left_hand_X_BE_current, left_hand_X_BE_next)
+            delta_transform_right = self.get_delta_transform(right_hand_X_BE_current, right_hand_X_BE_next)
+            relative_transform_left = self.get_relative_horizon_transform(left_hand_X_BE_current)
+            relative_transform_right = self.get_relative_horizon_transform(right_hand_X_BE_current)
 
             left_hand_state = df["states.left_ee.qpos"].tolist()
             right_hand_state = df["states.right_ee.qpos"].tolist()
@@ -146,6 +148,9 @@ class G1ArmsDataset(BaseDataset):
             left_hand_next_pos, left_hand_next_orien = transform_utils.extract_robot_pos_orien(
                 np.array(left_hand_X_BE_next)
             )
+            left_hand_delta_pos, left_hand_delta_orien = transform_utils.extract_robot_pos_orien(
+                np.array(delta_transform_left)
+            )
             left_hand_relative_pos, left_hand_relative_orien = transform_utils.extract_robot_pos_orien(
                 np.array(relative_transform_left)
             )
@@ -155,6 +160,9 @@ class G1ArmsDataset(BaseDataset):
             )
             right_hand_next_pos, right_hand_next_orien = transform_utils.extract_robot_pos_orien(
                 np.array(right_hand_X_BE_next)
+            )
+            right_hand_delta_pos, right_hand_delta_orien = transform_utils.extract_robot_pos_orien(
+                np.array(delta_transform_right)
             )
             right_hand_relative_pos, right_hand_relative_orien = transform_utils.extract_robot_pos_orien(
                 np.array(relative_transform_right)
@@ -167,25 +175,37 @@ class G1ArmsDataset(BaseDataset):
                 "left_robot_orien": left_hand_current_orien,
                 "left_action_pos": left_hand_next_pos,
                 "left_action_orien": left_hand_next_orien,
-                "left_relative_pos": left_hand_relative_pos,
-                "left_relative_orien": left_hand_relative_orien,
+                "left_delta_pos": left_hand_delta_pos,
+                "left_delta_orien": left_hand_delta_orien,
+                "left_relative_pos": left_hand_relative_pos if self.action_mode == "relative" else left_hand_delta_pos,
+                "left_relative_orien": (
+                    left_hand_relative_orien if self.action_mode == "relative" else left_hand_delta_orien
+                ),
                 "right_robot_pos": right_hand_current_pos,
                 "right_robot_orien": right_hand_current_orien,
                 "right_action_pos": right_hand_next_pos,
                 "right_action_orien": right_hand_next_orien,
-                "right_relative_pos": right_hand_relative_pos,
-                "right_relative_orien": right_hand_relative_orien,
+                "right_delta_pos": right_hand_delta_pos,
+                "right_delta_orien": right_hand_delta_orien,
+                "right_relative_pos": (
+                    right_hand_relative_pos if self.action_mode == "relative" else right_hand_delta_pos
+                ),
+                "right_relative_orien": (
+                    right_hand_relative_orien if self.action_mode == "relative" else right_hand_delta_orien
+                ),
                 "left_hand_state": left_hand_state,
                 "left_hand_action": left_hand_action,
                 "right_hand_state": right_hand_state,
                 "right_hand_action": right_hand_action,
                 "progress": progress,
                 "robot_state": robot_state,
+                "left_X_BE": left_hand_X_BE_current,
+                "right_X_BE": right_hand_X_BE_current,
             }
 
             if len(self.low_dim_obs_keys) != 0:
                 state = np.concatenate([rlds[episode_index][key] for key in self.low_dim_obs_keys], axis=-1)
-                action = np.concatenate([rlds[episode_index][key] for key in self.action_keys], axis=-1)
+                action = self.build_action_array(rlds[episode_index])
 
                 rlds[episode_index]["state"] = state
                 rlds[episode_index]["action"] = action
