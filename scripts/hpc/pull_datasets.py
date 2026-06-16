@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-from __future__ import annotations
-
 import subprocess
 import shlex
 from dataclasses import dataclass
@@ -14,28 +12,24 @@ from InquirerPy import inquirer
 
 @dataclass
 class Config:
-    local_root: Path
+    local_root: Path = Path("./data/")
     remote: str = "hpc"
     remote_root: str = "/work/cyphy/robot_learning/single_panda"
     ignore_existing: bool = True
 
 
 @dataclass(frozen=True)
-class LocalDataset:
-    path: Path
+class RemoteDataset:
+    path: str
     modified_timestamp: float
     modified_date: str
-
-    @property
-    def name(self) -> str:
-        return self.path.name
-
+    
     @property
     def dated_label(self) -> str:
-        return f"{self.name} ({self.modified_date})"
+        return f"{self.path} ({self.modified_date})"
 
     def remote_path(self, config: Config) -> str:
-        return f"{config.remote_root}/{self.name}"
+        return f"{config.remote_root}/{self.path}"
 
 
 def run(cmd: list[str], *, capture: bool = False) -> str:
@@ -49,24 +43,38 @@ def run(cmd: list[str], *, capture: bool = False) -> str:
     return result.stdout if capture else ""
 
 
-def list_local_datasets(config: Config) -> list[LocalDataset]:
-    local_root = config.local_root.expanduser()
+def list_remote_datasets(config: Config) -> list[RemoteDataset]:
+    cmd = [
+        "ssh", 
+        config.remote, 
+        (
+            f"cd {config.remote_root} || exit 1; "
+            "find . -mindepth 1 -maxdepth 1 -type d "
+            "-printf '%T@\t%Td-%Tm-%TY\t%p\n'"
+        ),
+    ]
 
-    if not local_root.exists():
-        raise RuntimeError(f"Local dataset root does not exist: {local_root}")
+    output = run(cmd, capture=True)
 
-    datasets: list[LocalDataset] = []
+    datasets: list[RemoteDataset] = []
 
-    for path in local_root.iterdir():
-        if not path.is_dir():
+    for line in output.splitlines():
+        line = line.strip()
+
+        if not line:
             continue
 
-        modified_timestamp = path.stat().st_mtime
-        modified_date = datetime.fromtimestamp(modified_timestamp).strftime("%d-%m-%Y")
+        fields = line.split("\t", maxsplit=2)
+
+        if len(fields) != 3:
+            continue
+
+        timestamp, modified_date, path = fields
+
         datasets.append(
-            LocalDataset(
+            RemoteDataset(
                 path=path,
-                modified_timestamp=modified_timestamp,
+                modified_timestamp=float(timestamp),
                 modified_date=modified_date,
             )
         )
@@ -74,7 +82,7 @@ def list_local_datasets(config: Config) -> list[LocalDataset]:
     return sorted(datasets, key=lambda dataset: dataset.modified_timestamp, reverse=True)
 
 
-def transfer_dataset(dataset: LocalDataset, config: Config) -> None:
+def transfer_dataset(dataset: RemoteDataset, config: Config) -> None:
     remote_path = dataset.remote_path(config)
 
     run(["ssh", config.remote, f"mkdir -p {shlex.quote(remote_path)}"])
@@ -89,8 +97,8 @@ def transfer_dataset(dataset: LocalDataset, config: Config) -> None:
 
     cmd.extend(
         [
-            f"{dataset.path}/",
             f"{config.remote}:{remote_path}/",
+            f"{config.local_root}/{dataset.path}/",
         ]
     )
 
@@ -103,21 +111,21 @@ def transfer_dataset(dataset: LocalDataset, config: Config) -> None:
 
 
 def main(config: Config) -> None:
-    datasets = list_local_datasets(config)
+    datasets = list_remote_datasets(config)
 
     if not datasets:
         raise RuntimeError(f"No datasets found under {config.local_root.expanduser()}")
 
     choices = [
         {
-            "name": f"{dataset.dated_label} -> {dataset.path}",
+            "name": f"{dataset.dated_label} -> {config.local_root}/{dataset.path}",
             "value": dataset,
         }
         for dataset in datasets
     ]
 
-    selected: list[LocalDataset] = inquirer.checkbox(
-        message="Which datasets do you want to transfer to HPC?",
+    selected: list[RemoteDataset] = inquirer.checkbox(
+        message="Which datasets do you want to transfer from HPC?",
         choices=choices,
         instruction="Use <space> to select, <enter> to confirm",
         validate=lambda result: len(result) > 0,
