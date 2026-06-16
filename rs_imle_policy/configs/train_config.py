@@ -145,6 +145,9 @@ class DataConfig:
     use_next_state: bool = True
     # Whether to use the next_state or the leader position
 
+    val_episode_count: int = 10
+    # Number of final sorted episodes to reserve for validation
+
     # Vision configuration
     vision: VisionConfig = field(default_factory=VisionConfig)
 
