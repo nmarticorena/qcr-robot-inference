@@ -247,9 +247,10 @@ def replay_with_frankx(
     gripper_actions: Optional[NDArray[np.float64]],
 ) -> None:
     from rs_imle_policy.robots.panda import FrankxRobot
+    from rs_imle_policy.configs.panda_configs import SinglePandaConfig
 
     dt = 1.0 / config.rate_hz
-    robot = FrankxRobot(ip=config.robot_ip, dynamic_rel=config.dynamic_rel)
+    robot = FrankxRobot(config = SinglePandaConfig(robot_ip = config.robot_ip, dynamic_rel = config.dynamic_rel))
     home_q = get_home_q(config, episode, selected_indices)
     if home_q is not None:
         robot.move_to_start(home_q)
@@ -279,13 +280,14 @@ def replay_with_pandapy(
     gripper_actions: Optional[NDArray[np.float64]],
 ) -> None:
     from rs_imle_policy.robots.panda import PandaPyRobot
+    from rs_imle_policy.configs.panda_configs import SinglePandaConfig
 
     if episode.robot_q is None:
         raise ValueError("The pandapy backend replays recorded robot_q joints, but this episode has no robot_q.")
 
     print("PandaPyRobot has no waypoint replay in panda.py; using blocking robot_q joint replay instead.")
     dt = 1.0 / config.rate_hz
-    robot = PandaPyRobot(ip=config.robot_ip, dynamic_rel=config.dynamic_rel)
+    robot = PandaPyRobot(SinglePandaConfig(robot_ip=config.robot_ip, dynamic_rel=config.dynamic_rel))
     home_q = get_home_q(config, episode, selected_indices)
     if home_q is not None:
         robot.move_to_start(home_q)
