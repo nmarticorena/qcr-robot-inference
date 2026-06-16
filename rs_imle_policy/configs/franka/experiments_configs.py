@@ -88,7 +88,7 @@ class PickPlaceDiffusionConfig(ExperimentConfig):
 class PickPlaceDiffusionDeltaConfig(ExperimentConfig):
     """Pick and place task with Diffusion using delta actions"""
 
-    model: RSIMLE | Diffusion = field(default_factory=Diffusion)
+    model: Diffusion = field(default_factory=Diffusion)
     data: DataConfig = field(default_factory=DeltaActionsConfig)
 
 
@@ -96,7 +96,7 @@ class PickPlaceDiffusionDeltaConfig(ExperimentConfig):
 class PickPlaceDiffusionRelativeConfig(ExperimentConfig):
     """Pick and place task with Diffusion using relative actions"""
 
-    model: RSIMLE | Diffusion = field(default_factory=Diffusion)
+    model: Diffusion = field(default_factory=Diffusion)
     data: DataConfig = field(default_factory=RelativeActionsConfig)
 
 @dataclass
