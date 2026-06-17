@@ -122,8 +122,8 @@ def pusht_obs_cond(args: ExperimentConfig, nets, obs_history, stats: dict) -> to
     obs_features = torch.cat([*image_features, nagent], dim=-1)
     return obs_features.flatten(start_dim=1)
 
-
-def compute_val_loss(
+@torch.no_grad()
+def compute_val_rollout_pos_error(
     args: ExperimentConfig,
     nets,
     noise_scheduler,
@@ -147,34 +147,35 @@ def compute_val_loss(
 
     obs_features = torch.cat([*image_features, nagent], dim=-1)
     obs_cond = obs_features.flatten(start_dim=1)
+    noise = torch.randn(naction.shape, device=device)
 
     if isinstance(args.model, Diffusion):
-        noise = torch.randn(naction.shape, device=device)
         noise_actions = noise
         for k in noise_scheduler.timesteps:
             noise_pred = nets["noise_pred_net"](sample = noise_actions, timestep=k, global_cond=obs_cond)
             noise_actions = noise_scheduler.step(model_output = noise_pred, timestep = int(k), sample = noise_actions).prev_sample
     elif isinstance(args.model, RSIMLE):
-        noise = torch.randn(
-            batch_size * args.model.n_samples_per_condition,
-            *naction.shape[1:],
-            device=device,
-        )
-        repeated_obs_cond = obs_cond.repeat_interleave(args.model.n_samples_per_condition, dim=0)
+        noise_actions = nets["generator"](noise, global_cond = obs_cond)
 
-        fake_actions = nets["generator"](noise, global_cond=repeated_obs_cond)
-        fake_actions = fake_actions.reshape(batch_size, args.model.n_samples_per_condition, *naction.shape[1:])
     elif isinstance(args.model, FlowMatching):
-        noise = torch.randn(naction.shape, device=device)
-        t = torch.rand(batch_size, device=device)
-        t_shaped = t.reshape(-1, *([1] * (noise.dim() - 1)))
-        xt = t_shaped * naction + (1 - t_shaped) * noise
-        vector = naction - noise
-        timesteps = (t * args.model.timestep_integer_scaler).long()
-        pred = nets["noise_pred_net"](xt, timesteps, global_cond=obs_cond)
+        ts = torch.linspace(0.0, 1.0, args.model.num_flow_iters+1, device = args.model.device)[:-1]
+        dt = 1.0 / args.model.num_flow_iters
+        for t in ts:
+            timestep = (t * args.model.timestep_integer_scaler).long()
 
-    pred_actions = noise_actions.detach().to("cpu").numpy()
+            # predict noise
+            pred = nets['noise_pred_net'](
+                sample=noise_actions,
+                timestep=timestep,
+                global_cond=obs_cond
+            )
+            noise_actions = noise_actions + pred * dt
+
+
+    pred_actions = noise_actions.detach().to("cpu").numpy() # [batch_size, action_horizon, action_dim]
     pred_robot_actions = dataset.n_action_to_robot_action(pred_actions)
+    pred_robot_pos  = torch.from_numpy(pred_robot_actions["pos"]) # [batch_size, action_horizon, 3]
+    gt_pos = batch["gt"][:,:,:3,-1]
 
     error = nn.functional.mse_loss(torch.from_numpy(pred_robot_actions["pos"]), batch["gt"][:,:,:3,-1])
 
