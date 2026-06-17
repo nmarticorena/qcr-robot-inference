@@ -1,3 +1,4 @@
+from rs_imle_policy.datasets import BaseDataset
 import torch.nn as nn
 import copy
 import os
@@ -122,80 +123,158 @@ def pusht_obs_cond(args: ExperimentConfig, nets, obs_history, stats: dict) -> to
     return obs_features.flatten(start_dim=1)
 
 
-def evaluate_pusht_policy(
+def compute_val_loss(
     args: ExperimentConfig,
     nets,
     noise_scheduler,
-    ema,
-    env,
-    stats: dict,
-    train_step: int,
-    max_steps: int = 200,
-) -> None:
-    if env is None:
-        return
+    batch:dict,
+    dataset: BaseDataset,
+    *,
+    train_step: int | None = None,
+) -> torch.Tensor:
+    device = args.model.device
+    obs_horizon = args.model.obs_horizon
+    cams_names = args.data.vision.cameras
 
+    nagent = batch["state"][:, :obs_horizon].to(device)
+    naction = batch["action"].to(device)
+    batch_size = naction.shape[0]
+
+    images = [batch[f"frame_{cam}"][:, :obs_horizon].to(device) for cam in cams_names]
+    image_features = [
+        process_image(img, nets[f"vision_encoder_{cam}"], device) for img, cam in zip(images, cams_names)
+    ]
+
+    obs_features = torch.cat([*image_features, nagent], dim=-1)
+    obs_cond = obs_features.flatten(start_dim=1)
+
+    if isinstance(args.model, Diffusion):
+        noise = torch.randn(naction.shape, device=device)
+        noise_actions = noise
+        for k in noise_scheduler.timesteps:
+            noise_pred = nets["noise_pred_net"](sample = noise_actions, timestep=k, global_cond=obs_cond)
+            noise_actions = noise_scheduler.step(model_output = noise_pred, timestep = int(k), sample = noise_actions).prev_sample
+    elif isinstance(args.model, RSIMLE):
+        noise = torch.randn(
+            batch_size * args.model.n_samples_per_condition,
+            *naction.shape[1:],
+            device=device,
+        )
+        repeated_obs_cond = obs_cond.repeat_interleave(args.model.n_samples_per_condition, dim=0)
+
+        fake_actions = nets["generator"](noise, global_cond=repeated_obs_cond)
+        fake_actions = fake_actions.reshape(batch_size, args.model.n_samples_per_condition, *naction.shape[1:])
+    elif isinstance(args.model, FlowMatching):
+        noise = torch.randn(naction.shape, device=device)
+        t = torch.rand(batch_size, device=device)
+        t_shaped = t.reshape(-1, *([1] * (noise.dim() - 1)))
+        xt = t_shaped * naction + (1 - t_shaped) * noise
+        vector = naction - noise
+        timesteps = (t * args.model.timestep_integer_scaler).long()
+        pred = nets["noise_pred_net"](xt, timesteps, global_cond=obs_cond)
+
+    pred_actions = noise_actions.detach().to("cpu").numpy()
+    pred_robot_actions = dataset.n_action_to_robot_action(pred_actions)
+
+    error = nn.functional.mse_loss(torch.from_numpy(pred_robot_actions["pos"]), batch["gt"][:,:,:3,-1])
+
+    return error
+
+
+
+def compute_batch_loss(
+    args: ExperimentConfig,
+    nets,
+    noise_scheduler,
+    batch: dict,
+    *,
+    train_step: int | None = None,
+    log_keypoint_metrics_enabled: bool = False,
+) -> torch.Tensor:
+    device = args.model.device
+    obs_horizon = args.model.obs_horizon
+    cams_names = args.data.vision.cameras
+
+    nagent = batch["state"][:, :obs_horizon].to(device)
+    naction = batch["action"].to(device)
+    batch_size = naction.shape[0]
+
+    images = [batch[f"frame_{cam}"][:, :obs_horizon].to(device) for cam in cams_names]
+    image_features = [
+        process_image(img, nets[f"vision_encoder_{cam}"], device) for img, cam in zip(images, cams_names)
+    ]
+    if log_keypoint_metrics_enabled and train_step is not None:
+        log_keypoint_metrics(nets, cams_names, train_step)
+
+    obs_features = torch.cat([*image_features, nagent], dim=-1)
+    obs_cond = obs_features.flatten(start_dim=1)
+
+    if isinstance(args.model, Diffusion):
+        noise = torch.randn(naction.shape, device=device)
+        timesteps = torch.randint(
+            0,
+            noise_scheduler.config.num_train_timesteps,
+            (batch_size,),
+            device=device,
+        ).long()
+        noisy_actions = noise_scheduler.add_noise(naction, noise, timesteps)
+
+        noise_pred = nets["noise_pred_net"](noisy_actions, timesteps, global_cond=obs_cond)
+        return nn.functional.mse_loss(noise_pred, noise)
+
+    if isinstance(args.model, RSIMLE):
+        noise = torch.randn(
+            batch_size * args.model.n_samples_per_condition,
+            *naction.shape[1:],
+            device=device,
+        )
+        repeated_obs_cond = obs_cond.repeat_interleave(args.model.n_samples_per_condition, dim=0)
+
+        fake_actions = nets["generator"](noise, global_cond=repeated_obs_cond)
+        fake_actions = fake_actions.reshape(batch_size, args.model.n_samples_per_condition, *naction.shape[1:])
+
+        return rs_imle_loss(
+            naction,
+            fake_actions,
+            args.model.epsilon,
+            train_step=train_step,
+        )
+
+    if isinstance(args.model, FlowMatching):
+        noise = torch.randn(naction.shape, device=device)
+        t = torch.rand(batch_size, device=device)
+        t_shaped = t.reshape(-1, *([1] * (noise.dim() - 1)))
+        xt = t_shaped * naction + (1 - t_shaped) * noise
+        vector = naction - noise
+        timesteps = (t * args.model.timestep_integer_scaler).long()
+        pred = nets["noise_pred_net"](xt, timesteps, global_cond=obs_cond)
+        return nn.functional.mse_loss(pred, vector)
+
+    raise NotImplementedError
+
+
+@torch.no_grad()
+def validate(
+    args: ExperimentConfig,
+    nets,
+    val_dataloader,
+    noise_scheduler,
+) -> float:
     was_training = nets.training
-    ema_nets = copy.deepcopy(nets)
-    ema.copy_to(ema_nets.parameters())
-    ema_nets.eval()
-
-    final_rewards = []
-    max_rewards = []
-    successes = []
-    video_frames = []
+    nets.eval()
+    losses = []
 
     try:
-        for episode_idx in range(args.training_params.num_eval_episodes):
-            env.seed(episode_idx)
-            obs, _ = env.reset()
-            obs_history = deque([obs] * args.model.obs_horizon, maxlen=args.model.obs_horizon)
-            action_queue = deque()
-            reward = 0.0
-            episode_max_reward = 0.0
-            success = False
-            record_video = episode_idx == 0
-
-            for _ in range(max_steps):
-                if not action_queue:
-                    obs_cond = pusht_obs_cond(args, ema_nets, obs_history, stats)
-                    naction = sample_normalized_actions(args, ema_nets, noise_scheduler, obs_cond)
-                    action_seq = unnormalize_data(naction[0].detach().cpu().numpy(), stats["action"])
-                    start = args.model.obs_horizon - 1
-                    end = start + args.model.action_horizon
-                    action_queue.extend(action_seq[start:end])
-
-                action = np.asarray(action_queue.popleft())
-                obs, reward, terminated, truncated, _ = env.step(action)
-                obs_history.append(obs)
-                if record_video:
-                    video_frames.append(env.render("rgb_array"))
-                episode_max_reward = max(episode_max_reward, float(reward))
-                if terminated or truncated:
-                    success = bool(terminated)
-                    break
-
-            final_rewards.append(float(reward))
-            max_rewards.append(episode_max_reward)
-            successes.append(float(success))
-
-        log_data = {
-            "eval/pusht_final_reward": float(np.mean(final_rewards)),
-            "eval/pusht_max_reward": float(np.mean(max_rewards)),
-            "eval/pusht_success_rate": float(np.mean(successes)),
-        }
-        if video_frames:
-            video = np.moveaxis(np.stack(video_frames).astype(np.uint8), -1, 1)
-            fps = env.metadata.get("video.frames_per_second", 10)
-            log_data["eval/pusht_video"] = wandb.Video(video, fps=fps, format="mp4")
-
-        wandb.log(
-            log_data,
-            step=train_step,
-        )
+        for batch in val_dataloader:
+            loss = compute_val_loss(args, nets, noise_scheduler, batch, val_dataloader.dataset)
+            losses.append(loss.item())
     finally:
         if was_training:
             nets.train()
+
+    if not losses:
+        return float("nan")
+    return float(np.mean(losses))
 
 
 def train(
@@ -207,6 +286,7 @@ def train(
     lr_scheduler,
     ema,
     stats: dict,
+    val_dataloader=None,
     env: Optional = None,
 ):
     nets.train()
@@ -221,10 +301,7 @@ def train(
 
     # make dir if not exist
     n_epochs = args.training_params.num_epochs
-    device = args.model.device
-    obs_horizon = args.model.obs_horizon
 
-    cams_names = args.data.vision.cameras
     train_step = 0
     keypoint_metrics_log_interval = args.training_params.keypoint_metrics_log_interval
     log_keypoint_metrics_enabled = (
@@ -238,57 +315,16 @@ def train(
         start_time = time.time()
         with tqdm(dataloader, desc=f"Epoch {epoch + 1}/{n_epochs}", leave=False) as tepoch:
             for batch in tepoch:
-                nagent = batch["state"][:, :obs_horizon].to(device)
-                naction = batch["action"].to(device)
-                B = naction.shape[0]
-
-                images = [batch[f"frame_{cam}"][:, :obs_horizon].to(device) for cam in cams_names]
-                image_features = [
-                    process_image(img, nets[f"vision_encoder_{cam}"], device) for img, cam in zip(images, cams_names)
-                ]
-                if log_keypoint_metrics_enabled and train_step % keypoint_metrics_log_interval == 0:
-                    log_keypoint_metrics(nets, cams_names, train_step)
-
-                obs_features = torch.cat([*image_features, nagent], dim=-1)
-                obs_cond = obs_features.flatten(start_dim=1)
-
-                if isinstance(args.model, Diffusion):
-                    noise = torch.randn(naction.shape, device=device)
-                    timesteps = torch.randint(
-                        0,
-                        noise_scheduler.config.num_train_timesteps,
-                        (B,),
-                        device=device,
-                    ).long()
-                    noisy_actions = noise_scheduler.add_noise(naction, noise, timesteps)
-
-                    noise_pred = nets["noise_pred_net"](noisy_actions, timesteps, global_cond=obs_cond)
-                    loss = nn.functional.mse_loss(noise_pred, noise)
-                elif isinstance(args.model, RSIMLE):
-                    noise = torch.randn(
-                        B * args.model.n_samples_per_condition,
-                        *naction.shape[1:],
-                        device=device,
-                    )
-                    repeated_obs_cond = obs_cond.repeat_interleave(args.model.n_samples_per_condition, dim=0)
-
-                    fake_actions = nets["generator"](noise, global_cond=repeated_obs_cond)
-                    fake_actions = fake_actions.reshape(B, args.model.n_samples_per_condition, *naction.shape[1:])
-
-                    loss = rs_imle_loss(naction, fake_actions, args.model.epsilon, train_step=train_step)
-                elif isinstance(args.model, FlowMatching):
-                    noise = torch.randn(naction.shape, device=device)
-                    t = torch.rand(B, device=device)
-                    t_shaped = t.reshape(-1, *([1] * (noise.dim() - 1)))
-                    xt = t_shaped * naction + (1 - t_shaped) * noise
-                    vector = naction - noise
-                    timesteps = (t * args.model.timestep_integer_scaler).long()
-                    pred = nets["noise_pred_net"](
-                        xt, timesteps, global_cond=obs_cond)
-                    loss = nn.functional.mse_loss(pred, vector)
-
-                else:
-                    raise NotImplementedError
+                loss = compute_batch_loss(
+                    args,
+                    nets,
+                    noise_scheduler,
+                    batch,
+                    train_step=train_step,
+                    log_keypoint_metrics_enabled=(
+                        log_keypoint_metrics_enabled and train_step % keypoint_metrics_log_interval == 0
+                    ),
+                )
 
                 # If loss is 0, skip backprop and log flag in wandb
                 if loss == 0:
@@ -336,8 +372,18 @@ def train(
             )
 
         avg_loss = np.mean(epoch_loss)
-        wandb.log({"avg_train_loss": avg_loss, "epoch": epoch}, step=train_step)
-        print(f"Epoch {epoch + 1}/{n_epochs} - Avg. Loss: {avg_loss:.4f} - Time: {time.time() - start_time:.2f}s")
+        log_data = {"avg_train_loss": avg_loss, "epoch": epoch}
+        val_loss = None
+        if val_dataloader is not None:
+            val_loss = validate(args, nets, val_dataloader, noise_scheduler)
+            log_data["avg_val_loss"] = val_loss
+
+        wandb.log(log_data, step=train_step)
+        val_msg = "" if val_loss is None else f" - Avg. Val Loss: {val_loss:.4f}"
+        print(
+            f"Epoch {epoch + 1}/{n_epochs} - Avg. Loss: {avg_loss:.4f}"
+            f"{val_msg} - Time: {time.time() - start_time:.2f}s"
+        )
         # If the loss is 0 for a whole epoch, log flag in wandb
         if avg_loss == 0:
             wandb.log({"zero_loss_epoch": 1}, step=train_step)
@@ -346,7 +392,12 @@ def train(
     return
 
 
-def build_dataloader(config: ExperimentConfig, dataset: DatasetT) -> torch.utils.data.DataLoader:
+def build_dataloader(
+    config: ExperimentConfig,
+    dataset: DatasetT,
+    *,
+    shuffle: bool = True,
+) -> torch.utils.data.DataLoader:
     num_workers = 0 if config.debug else config.training_params.num_workers
     persistent_workers = num_workers > 0
 
@@ -354,34 +405,27 @@ def build_dataloader(config: ExperimentConfig, dataset: DatasetT) -> torch.utils
         dataset,
         batch_size=config.training_params.batch_size,
         num_workers=num_workers,
-        shuffle=True,
+        shuffle=shuffle,
         pin_memory=True,
         persistent_workers=persistent_workers,
     )
 
 
-def build_franka_dataset(config: ExperimentConfig):
-    from rs_imle_policy.datasets.single_franka import PandaPolicyDataset
-
-    return PandaPolicyDataset(
-        config.dataset_path,
-        pred_horizon=config.model.pred_horizon,
-        obs_horizon=config.model.obs_horizon,
-        action_horizon=config.model.action_horizon,
-        low_dim_obs_keys=config.data.lowdim_obs_keys,
-        action_keys=config.data.action_keys,
-        vision_config=config.data.vision,
-        use_next_state=config.data.use_next_state,
-        action_mode=config.data.action_mode,
-    )
-
-
-def run_training(config: ExperimentConfig, dataset: Dataset, env: Optional=None) -> None:
+def run_training(
+    config: ExperimentConfig,
+    dataset: Dataset,
+    val_dataset: Dataset | None = None,
+    env: Optional = None,
+) -> None:
     exp_name = config.process_name()
     wandb.init(project=config.task_name, config=asdict(config), name=exp_name)
 
     try:
-        dataloader = build_dataloader(config, dataset)
+        dataloader = build_dataloader(config, dataset, shuffle=True)
+        val_dataloader = None
+        if val_dataset is not None:
+            val_dataloader = build_dataloader(config, val_dataset, shuffle=False)
+
         policy = Policy(config=config, training=True, dataset=dataset)
         train(
             config,
@@ -392,6 +436,7 @@ def run_training(config: ExperimentConfig, dataset: Dataset, env: Optional=None)
             policy.lr_scheduler,
             policy.ema,
             dataset.stats,
+            val_dataloader=val_dataloader,
             env=env,
         )
     finally:
@@ -404,7 +449,8 @@ def main():
     from rs_imle_policy.configs.experiment_configs import FrankaExperimentConfigChoice
 
     config = tyro.cli(FrankaExperimentConfigChoice)
-    run_training(config, build_franka_dataset(config))
+    train_dataset, val_dataset = build_franka_datasets(config)
+    run_training(config, train_dataset, val_dataset=val_dataset)
 
 
 if __name__ == "__main__":

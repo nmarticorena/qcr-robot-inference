@@ -3,6 +3,8 @@
 This module provides dataset classes and data normalization utilities
 for training robot manipulation policies from demonstrations.
 """
+from rs_imle_policy.datasets import unnormalize_data
+from numpy.typing import NDArray
 
 import json
 import os
@@ -12,6 +14,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import roboticstoolbox as rtb
+import torch
 
 from rs_imle_policy.datasets.base_dataset import BaseDataset
 from rs_imle_policy.utils import transforms as transform_utils
@@ -156,7 +159,7 @@ class PandaPolicyDataset(BaseDataset):
                 "gello_q": df["gello_q"].tolist(),
                 "robot_q": df["robot_q"].tolist(),
                 "progress": progress,
-                "gt" : X_BE_next,
+                "gt" : np.array(X_BE_next),
             }
 
             if len(self.low_dim_obs_keys) != 0:
@@ -166,6 +169,29 @@ class PandaPolicyDataset(BaseDataset):
                 rlds[episode_index]["state"] = state
                 rlds[episode_index]["action"] = action
         return rlds
+
+    def n_action_to_robot_action(self, naction: NDArray) -> dict[str, NDArray]:
+        actions = unnormalize_data(naction, stats = self.stats["action"])
+        robot_action = {}
+        robot_action["progress"] = actions[...,-1:]
+        robot_action["gripper"] = actions[...,-1:]
+        if self.action_mode in ("delta", "relative"):
+            for batch_idx in range(actions.shape[0]):
+                trans = actions[batch_idx, :, :3]
+                rot_6d = actions[batch_idx, :, 3:9]
+                rot_mats = transform_utils.rotation_6d_to_matrix(torch.from_numpy(rot_6d)).numpy()
+                if self.action_mode == "delta":
+                    trans, rot_mats = self.delta_action_to_absolute(trans, rot_mats, pos, rot)
+                else:
+                    trans, rot_mats = self.relative_action_to_absolute(trans, rot_mats, pos, rot)
+        else:
+            robot_action["pos"] = actions[..., :3]
+            robot_action["rot"] = transform_utils.rotation_6d_to_matrix(torch.from_numpy(actions[...,3:9])).numpy()
+
+        return robot_action
+
+
+        
 
 
 if __name__ == "__main__":
