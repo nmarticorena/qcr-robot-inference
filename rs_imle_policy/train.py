@@ -158,6 +158,7 @@ def compute_val_rollout_pos_error(
         noise_actions = nets["generator"](noise, global_cond = obs_cond)
 
     elif isinstance(args.model, FlowMatching):
+        noise_actions = noise
         ts = torch.linspace(0.0, 1.0, args.model.num_flow_iters+1, device = args.model.device)[:-1]
         dt = 1.0 / args.model.num_flow_iters
         for t in ts:
