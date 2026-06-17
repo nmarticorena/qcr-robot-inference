@@ -151,7 +151,7 @@ class BaseDataset(Dataset, abc.ABC):
         """Build an RLDS-like dictionary from raw dataset files."""
 
     @abc.abstractmethod
-    def n_action_to_robot_action(self, naction: NDArray) -> dict[str, NDArray]:
+    def n_action_to_robot_action(self, naction: NDArray, nstate:NDArray) -> dict[str, NDArray]:
         """Convert normalized action to action for the robot"""
 
     def compute_normalization_stats(self):

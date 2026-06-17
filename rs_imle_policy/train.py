@@ -173,7 +173,7 @@ def compute_val_rollout_pos_error(
 
 
     pred_actions = noise_actions.detach().to("cpu").numpy() # [batch_size, action_horizon, action_dim]
-    pred_robot_actions = dataset.n_action_to_robot_action(pred_actions)
+    pred_robot_actions = dataset.n_action_to_robot_action(pred_actions, batch["state"])
     pred_robot_pos  = torch.from_numpy(pred_robot_actions["pos"]) # [batch_size, action_horizon, 3]
     gt_pos = batch["gt"][:,:,:3,-1]
 
@@ -312,13 +312,11 @@ def validate(
     nets.eval()
     errors = []
 
-    try:
-        for batch in val_dataloader:
-            error = compute_val_rollout_pos_error(args, nets, noise_scheduler, batch, val_dataloader.dataset)
-            errors.append(error.detach().cpu())
-    finally:
-        if was_training:
-            nets.train()
+    for batch in tqdm(val_dataloader, desc="Validation", leave=False, unit="batch"):
+        error = compute_val_rollout_pos_error(args, nets, noise_scheduler, batch, val_dataloader.dataset)
+        errors.append(error.detach().cpu())
+    if was_training:
+        nets.train()
 
     if not errors:
         return float("nan")
@@ -387,7 +385,12 @@ def train(
     for epoch in range(n_epochs+1):
         epoch_loss = []
         start_time = time.time()
-        with tqdm(dataloader, desc=f"Epoch {epoch + 1}/{n_epochs}", leave=False) as tepoch:
+        with tqdm(
+            dataloader,
+            desc=f"Epoch {epoch + 1}/{n_epochs + 1}",
+            leave=False,
+            unit="batch",
+        ) as tepoch:
             for batch in tepoch:
                 loss = compute_batch_loss(
                     args,
@@ -455,7 +458,7 @@ def train(
         wandb.log(log_data, step=train_step)
         val_msg = "" if val_loss is None else f" - Avg. Val Loss: {val_loss:.4f}"
         print(
-            f"Epoch {epoch + 1}/{n_epochs} - Avg. Loss: {avg_loss:.4f}"
+            f"Epoch {epoch + 1}/{n_epochs + 1} - Avg. Loss: {avg_loss:.4f}"
             f"{val_msg} - Time: {time.time() - start_time:.2f}s"
         )
         # If the loss is 0 for a whole epoch, log flag in wandb
