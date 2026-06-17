@@ -247,7 +247,6 @@ class PandaPolicyDataset(BaseDataset):
         translations = current_pos + np.einsum("ij,nj->ni", current_rot, trans)
         return translations, rotations
 
-    transform_action_to_absolute = delta_action_to_absolute
 
 
         
