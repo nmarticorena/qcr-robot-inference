@@ -12,6 +12,7 @@ import numpy as np
 import torch
 import tyro
 import wandb
+import matplotlib.pyplot as plt
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 
@@ -138,7 +139,6 @@ def compute_val_rollout_pos_error(
 
     nagent = batch["state"][:, :obs_horizon].to(device)
     naction = batch["action"].to(device)
-    batch_size = naction.shape[0]
 
     images = [batch[f"frame_{cam}"][:, :obs_horizon].to(device) for cam in cams_names]
     image_features = [
@@ -255,38 +255,81 @@ def compute_batch_loss(
     raise NotImplementedError
 
 
+def rollout_error_stats(errors: torch.Tensor) -> dict[str, torch.Tensor]:
+    n = errors.shape[0]
+    mean = errors.mean(dim=0)
+    std = errors.std(dim=0, unbiased=n > 1)
+    sem = std / n**0.5
+    ci95 = 1.96 * sem
+
+    return {
+        "mean": mean,
+        "std": std,
+        "ci_low": mean - ci95,
+        "ci_high": mean + ci95,
+        "min": errors.min(dim=0).values,
+        "max": errors.max(dim=0).values,
+    }
+
+
+def make_rollout_error_plot(errors: torch.Tensor, stats: dict[str, torch.Tensor]):
+    errors = errors.detach().cpu()
+    stats = {key: value.detach().cpu() for key, value in stats.items()}
+    steps = torch.arange(errors.shape[1]).numpy()
+
+    fig, ax = plt.subplots()
+
+    for curve in errors:
+        ax.plot(steps, curve.numpy(), alpha=0.25, linewidth=0.8)
+
+    ax.plot(steps, stats["mean"].numpy(), linewidth=2, label="mean")
+    ax.fill_between(
+        steps,
+        stats["ci_low"].numpy(),
+        stats["ci_high"].numpy(),
+        alpha=0.25,
+        label="95% CI",
+    )
+
+    ax.set_xlabel("horizon step")
+    ax.set_ylabel("position L2 error [m]")
+    ax.set_title("Validation rollout position error")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    return fig
+
+
 @torch.no_grad()
 def validate(
     args: ExperimentConfig,
     nets,
     val_dataloader,
     noise_scheduler,
-    train_step: int| None
+    train_step: int | None,
 ) -> float:
     was_training = nets.training
     nets.eval()
-    losses = []
+    errors = []
 
     try:
         for batch in val_dataloader:
-            loss = compute_val_rollout_pos_error(args, nets, noise_scheduler, batch, val_dataloader.dataset)
-            losses.append(loss.detach().cpu())
+            error = compute_val_rollout_pos_error(args, nets, noise_scheduler, batch, val_dataloader.dataset)
+            errors.append(error.detach().cpu())
     finally:
         if was_training:
             nets.train()
 
-    if not losses:
+    if not errors:
         return float("nan")
-     # [num_val_batches, pred_horizon]
-    per_batch_step_errors = torch.stack(losses, dim=0)
 
-    # [pred_horizon]
-    mean_per_step_error = per_batch_step_errors.mean(dim=0)
+    # [num_val_batches, pred_horizon]
+    errors = torch.stack(errors, dim=0)
+    stats = rollout_error_stats(errors)
 
-    mean_error = mean_per_step_error.mean()
-    final_step_error = mean_per_step_error[-1]
-    max_step_error = mean_per_step_error.max()
-    max_step_idx = mean_per_step_error.argmax()
+    mean_error = stats["mean"].mean()
+    final_step_error = stats["mean"][-1]
+    max_step_error, max_step_idx = stats["mean"].max(dim=0)
 
     if train_step is not None:
         log_data = {
@@ -296,25 +339,12 @@ def validate(
             "val/rollout_pos_l2_argmax": max_step_idx.item(),
         }
 
-        # Log each horizon step as its own scalar.
-        for i, error in enumerate(mean_per_step_error):
+        for i, error in enumerate(stats["mean"]):
             log_data[f"val/rollout_pos_l2_step_{i:02d}"] = error.item()
 
-        # Also log a single line plot.
-        table = wandb.Table(
-            data=[
-                [i, error.item()]
-                for i, error in enumerate(mean_per_step_error)
-            ],
-            columns=["horizon_step", "l2_error_m"],
-        )
-
-        log_data["val/rollout_pos_l2_curve"] = wandb.plot.line(
-            table,
-            "horizon_step",
-            "l2_error_m",
-            title="Validation rollout position error per horizon step",
-        )
+        fig = make_rollout_error_plot(errors, stats)
+        log_data["val/rollout_pos_l2_curve_ci"] = wandb.Image(fig)
+        plt.close(fig)
 
         wandb.log(log_data, step=train_step)
 
