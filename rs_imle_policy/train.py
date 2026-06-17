@@ -177,9 +177,10 @@ def compute_val_rollout_pos_error(
     pred_robot_pos  = torch.from_numpy(pred_robot_actions["pos"]) # [batch_size, action_horizon, 3]
     gt_pos = batch["gt"][:,:,:3,-1]
 
-    error = nn.functional.mse_loss(torch.from_numpy(pred_robot_actions["pos"]), batch["gt"][:,:,:3,-1])
+    per_timestep_l2 =torch.linalg.norm(pred_robot_pos - gt_pos, dim = -1).mean(dim=0)
+    
 
-    return error
+    return per_timestep_l2
 
 
 
@@ -260,6 +261,7 @@ def validate(
     nets,
     val_dataloader,
     noise_scheduler,
+    train_step: int| None
 ) -> float:
     was_training = nets.training
     nets.eval()
@@ -267,15 +269,56 @@ def validate(
 
     try:
         for batch in val_dataloader:
-            loss = compute_val_loss(args, nets, noise_scheduler, batch, val_dataloader.dataset)
-            losses.append(loss.item())
+            loss = compute_val_rollout_pos_error(args, nets, noise_scheduler, batch, val_dataloader.dataset)
+            losses.append(loss.detach().cpu())
     finally:
         if was_training:
             nets.train()
 
     if not losses:
         return float("nan")
-    return float(np.mean(losses))
+     # [num_val_batches, pred_horizon]
+    per_batch_step_errors = torch.stack(losses, dim=0)
+
+    # [pred_horizon]
+    mean_per_step_error = per_batch_step_errors.mean(dim=0)
+
+    mean_error = mean_per_step_error.mean()
+    final_step_error = mean_per_step_error[-1]
+    max_step_error = mean_per_step_error.max()
+    max_step_idx = mean_per_step_error.argmax()
+
+    if train_step is not None:
+        log_data = {
+            "val/rollout_pos_l2_mean": mean_error.item(),
+            "val/rollout_pos_l2_final": final_step_error.item(),
+            "val/rollout_pos_l2_max": max_step_error.item(),
+            "val/rollout_pos_l2_argmax": max_step_idx.item(),
+        }
+
+        # Log each horizon step as its own scalar.
+        for i, error in enumerate(mean_per_step_error):
+            log_data[f"val/rollout_pos_l2_step_{i:02d}"] = error.item()
+
+        # Also log a single line plot.
+        table = wandb.Table(
+            data=[
+                [i, error.item()]
+                for i, error in enumerate(mean_per_step_error)
+            ],
+            columns=["horizon_step", "l2_error_m"],
+        )
+
+        log_data["val/rollout_pos_l2_curve"] = wandb.plot.line(
+            table,
+            "horizon_step",
+            "l2_error_m",
+            title="Validation rollout position error per horizon step",
+        )
+
+        wandb.log(log_data, step=train_step)
+
+    return mean_error.item()
 
 
 def train(
@@ -376,7 +419,7 @@ def train(
         log_data = {"avg_train_loss": avg_loss, "epoch": epoch}
         val_loss = None
         if val_dataloader is not None:
-            val_loss = validate(args, nets, val_dataloader, noise_scheduler)
+            val_loss = validate(args, nets, val_dataloader, noise_scheduler, train_step)
             log_data["avg_val_loss"] = val_loss
 
         wandb.log(log_data, step=train_step)
