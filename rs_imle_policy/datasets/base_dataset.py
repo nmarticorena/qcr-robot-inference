@@ -64,7 +64,7 @@ class BaseDataset(Dataset, abc.ABC):
         self.action_keys = action_keys
         self.vision_config = vision_config
         self.visualize = visualize
-        self.skip_normalization_keys = skip_normalization_keys
+        self.skip_normalization_keys = ("gt",*skip_normalization_keys)
         self.save_normalization_stats = not visualize if save_normalization_stats is None else save_normalization_stats
         self.normalize = normalize
         self.load_images = load_images
@@ -185,6 +185,8 @@ class BaseDataset(Dataset, abc.ABC):
                 self.stats[keys] = get_composite_stats(self.low_dim_obs_keys)
             elif keys == "action" and self.action_keys:
                 self.stats[keys] = get_composite_stats(self.action_keys)
+            elif keys in self.skip_normalization_keys:
+                pass
             else:
                 self.stats[keys] = get_key_stats(keys)
 
@@ -200,7 +202,8 @@ class BaseDataset(Dataset, abc.ABC):
         """Apply normalization to every key in each episode."""
         for episode in self.rlds:
             for key in self.rlds[episode]:
-                self.rlds[episode][key] = normalize_data(np.array(self.rlds[episode][key]), self.stats[key])
+                if not self.skip_normalization(key):
+                    self.rlds[episode][key] = normalize_data(np.array(self.rlds[episode][key]), self.stats[key])
 
     def create_sample_indices(self, rlds_dataset: dict, sequence_length: int = 16) -> NDArray:
         """Create valid sample indices for the dataset.
@@ -313,8 +316,9 @@ class BaseDataset(Dataset, abc.ABC):
 
         robot_state = self.rlds[episode]["state"][buffer_start_idx:buffer_end_idx]
         robot_action = self.sample_action_sequence(episode, buffer_start_idx, buffer_end_idx)
+        gt = self.rlds[episode]["gt"][buffer_start_idx:buffer_end_idx]
 
-        seq = {"state": robot_state, "action": robot_action, "frames": frames}
+        seq = {"state": robot_state, "action": robot_action, "frames": frames, "gt": gt}
         return seq
 
     def sample_action_sequence(self, episode: int, buffer_start_idx: int, buffer_end_idx: int) -> NDArray:
@@ -339,7 +343,7 @@ class BaseDataset(Dataset, abc.ABC):
             idx: Sample index
 
         Returns:
-            Dictionary containing 'state', 'action', and camera frame tensors
+            Dictionary containing 'state', 'action', camera frame tensors and "gt" as the gt action poses
         """
         episode, buffer_start_idx, buffer_end_idx = self.indices[idx]
         seq = self.sample_sequence(episode, buffer_start_idx, buffer_end_idx)
@@ -356,6 +360,7 @@ class BaseDataset(Dataset, abc.ABC):
         return {
             "state": state,
             "action": action,
+            "gt": seq["gt"],
             **frames,
         }
 
@@ -406,6 +411,7 @@ class BaseDataset(Dataset, abc.ABC):
             **kwargs,
         )
 
+        #TODO: Here will be nicer to get the 
         val_dataset = cls.from_config(
             config,
             episode_names=val_episodes,

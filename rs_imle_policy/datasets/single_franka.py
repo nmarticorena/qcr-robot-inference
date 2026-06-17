@@ -53,6 +53,7 @@ class PandaPolicyDataset(BaseDataset):
             vision_config: Camera configuration
             visualize: If True, skip saving stats (for visualization only)
             use_next_state: If True, use next robot state as action target
+            episode_names: Optional subset of episode folder names to load
         """
         self.use_next_state = use_next_state
         self.robot = rtb.models.Panda()
@@ -155,6 +156,7 @@ class PandaPolicyDataset(BaseDataset):
                 "gello_q": df["gello_q"].tolist(),
                 "robot_q": df["robot_q"].tolist(),
                 "progress": progress,
+                "gt" : X_BE_next,
             }
 
             if len(self.low_dim_obs_keys) != 0:
@@ -168,12 +170,20 @@ class PandaPolicyDataset(BaseDataset):
 
 if __name__ == "__main__":
     import time
+    from rs_imle_policy.configs.franka.experiments_configs import AbsoluteActionsConfig 
 
-    dataset = PandaPolicyDataset("data/t_block_1", pred_horizon=16, obs_horizon=2, action_horizon=8)
+    dataset = PandaPolicyDataset(dataset_path = Path("./data/red_fruit_in_black_pot"), 
+                                 pred_horizon=16, 
+                                 obs_horizon=2, 
+                                 action_horizon=8,
+                                 low_dim_obs_keys = AbsoluteActionsConfig().lowdim_obs_keys,
+                                 action_keys = AbsoluteActionsConfig().action_keys,
+                                 )
 
     idx = 0
     while True:
         start_time = time.time()
         dataset.__getitem__(idx)
         print(f"Time taken: {time.time() - start_time}")
+        breakpoint()
         idx += 1
