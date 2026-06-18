@@ -34,8 +34,11 @@ def process_image(images, vision_encoder, device):
     return image_features
 
 
-def log_keypoint_metrics(nets, cams_names, train_step: int):
-    metrics = {}
+def log_keypoint_metrics(nets, cams_names, global_step: int, epoch: int):
+    metrics = {
+        "global_step": global_step,
+        "epoch": epoch,
+    }
     for cam in cams_names:
         encoder = nets[f"vision_encoder_{cam}"]
         avgpool = getattr(encoder, "avgpool", None)
@@ -44,12 +47,14 @@ def log_keypoint_metrics(nets, cams_names, train_step: int):
             continue
 
         cam_metrics = keypoint_spread_metrics(kps)
-        metrics.update({f"{cam}/{name}": value for name, value in cam_metrics.items()})
+        for name, value in cam_metrics.items():
+            metrics[f"{cam}/{name}"] = value.item()
+            metrics[f"train/{cam}/{name}"] = value.item()
 
-    if metrics:
+    if len(metrics) > 2:
         wandb.log(
-            {name: value.item() for name, value in metrics.items()},
-            step=train_step,
+            metrics,
+            step=global_step,
         )
 
 
@@ -130,8 +135,6 @@ def compute_val_rollout_pos_error(
     noise_scheduler,
     batch:dict,
     dataset: BaseDataset,
-    *,
-    train_step: int | None = None,
 ) -> torch.Tensor:
     device = args.model.device
     obs_horizon = args.model.obs_horizon
@@ -190,7 +193,8 @@ def compute_batch_loss(
     noise_scheduler,
     batch: dict,
     *,
-    train_step: int | None = None,
+    global_step: int | None = None,
+    epoch: int | None = None,
     log_keypoint_metrics_enabled: bool = False,
 ) -> torch.Tensor:
     device = args.model.device
@@ -205,8 +209,8 @@ def compute_batch_loss(
     image_features = [
         process_image(img, nets[f"vision_encoder_{cam}"], device) for img, cam in zip(images, cams_names)
     ]
-    if log_keypoint_metrics_enabled and train_step is not None:
-        log_keypoint_metrics(nets, cams_names, train_step)
+    if log_keypoint_metrics_enabled and global_step is not None and epoch is not None:
+        log_keypoint_metrics(nets, cams_names, global_step, epoch)
 
     obs_features = torch.cat([*image_features, nagent], dim=-1)
     obs_cond = obs_features.flatten(start_dim=1)
@@ -239,7 +243,7 @@ def compute_batch_loss(
             naction,
             fake_actions,
             args.model.epsilon,
-            train_step=train_step,
+            train_step=global_step,
         )
 
     if isinstance(args.model, FlowMatching):
@@ -306,7 +310,8 @@ def validate(
     nets,
     val_dataloader,
     noise_scheduler,
-    epoch_step: int | None,
+    global_step: int,
+    epoch: int,
 ) -> float:
     was_training = nets.training
     nets.eval()
@@ -329,24 +334,43 @@ def validate(
     final_step_error = stats["mean"][-1]
     max_step_error, max_step_idx = stats["mean"].max(dim=0)
 
-    if epoch_step is not None:
-        log_data = {
-            "val/rollout_pos_l2_mean": mean_error.item(),
-            "val/rollout_pos_l2_final": final_step_error.item(),
-            "val/rollout_pos_l2_max": max_step_error.item(),
-            "val/rollout_pos_l2_argmax": max_step_idx.item(),
-        }
+    log_data = {
+        "global_step": global_step,
+        "epoch": epoch,
+        "val/rollout_pos_l2_mean": mean_error.item(),
+        "val/rollout_pos_l2_final": final_step_error.item(),
+        "val/rollout_pos_l2_max": max_step_error.item(),
+        "val/rollout_pos_l2_argmax": max_step_idx.item(),
+        "val/rollout_pos_l2_max_step": max_step_idx.item(),
+    }
 
-        for i, error in enumerate(stats["mean"]):
-            log_data[f"val/rollout_pos_l2_step_{i:02d}"] = error.item()
+    for i, error in enumerate(stats["mean"]):
+        log_data[f"val/rollout_pos_l2_step_{i:02d}"] = error.item()
 
-        fig = make_rollout_error_plot(errors, stats)
-        log_data["val/rollout_pos_l2_curve_ci"] = wandb.Image(fig)
-        plt.close(fig)
+    fig = make_rollout_error_plot(errors, stats)
+    log_data["val/rollout_pos_l2_curve_ci"] = wandb.Image(fig)
+    plt.close(fig)
 
-        wandb.log(log_data, step=epoch_step)
+    wandb.log(log_data, step=global_step)
 
     return max_error
+
+
+def configure_wandb_metrics() -> None:
+    wandb.define_metric("global_step")
+    wandb.define_metric("epoch")
+
+    wandb.define_metric("train/*", step_metric="global_step")
+    wandb.define_metric("val/*", step_metric="epoch")
+    wandb.define_metric("epoch/*", step_metric="epoch")
+    wandb.define_metric("eval/*", step_metric="global_step")
+
+    # # Keep legacy metric names on the intended axes while newer names use namespaces.
+    # wandb.define_metric("loss", step_metric="global_step")
+    # wandb.define_metric("zero_loss", step_metric="global_step")
+    # wandb.define_metric("avg_train_loss", step_metric="epoch")
+    # wandb.define_metric("avg_val_loss", step_metric="epoch")
+    # wandb.define_metric("zero_loss_epoch", step_metric="epoch")
 
 
 def train(
@@ -374,7 +398,7 @@ def train(
     # make dir if not exist
     n_epochs = args.training_params.num_epochs
 
-    train_step = 0
+    global_step = 0
     keypoint_metrics_log_interval = args.training_params.keypoint_metrics_log_interval
     log_keypoint_metrics_enabled = (
         keypoint_metrics_log_interval > 0
@@ -397,16 +421,18 @@ def train(
                     nets,
                     noise_scheduler,
                     batch,
-                    train_step=train_step,
+                    global_step=global_step,
+                    epoch=epoch,
                     log_keypoint_metrics_enabled=(
-                        log_keypoint_metrics_enabled and train_step % keypoint_metrics_log_interval == 0
+                        log_keypoint_metrics_enabled and global_step % keypoint_metrics_log_interval == 0
                     ),
                 )
 
                 # If loss is 0, skip backprop and log flag in wandb
                 if loss == 0:
-                    wandb.log({"zero_loss": 1}, step=train_step)
+                    zero_loss = 1
                 else:
+                    zero_loss = 0
                     loss.backward()
                     if args.model.use_clamping:
                         torch.nn.utils.clip_grad_norm_(nets.parameters(), max_norm=1.0)
@@ -414,17 +440,26 @@ def train(
                     optimizer.zero_grad()
                     lr_scheduler.step()
                     ema.step(nets.parameters())
-                    wandb.log({"zero_loss": 0}, step=train_step)
-
-                wandb.log({"loss": loss.item()}, step=train_step)
 
                 loss_cpu = loss.item()
+                wandb.log(
+                    {
+                        "global_step": global_step,
+                        "epoch": epoch,
+                        "train/loss": loss_cpu,
+                        "train/zero_loss": zero_loss,
+                        "loss": loss_cpu,
+                        "zero_loss": zero_loss,
+                    },
+                    step=global_step,
+                )
+
                 epoch_loss.append(loss_cpu)
                 tepoch.set_postfix(loss=loss_cpu)
-                train_step += 1
+                global_step += 1
 
                 eval_interval = args.training_params.eval_interval
-                if env is not None and eval_interval > 0 and train_step % eval_interval == 0:
+                if env is not None and eval_interval > 0 and global_step % eval_interval == 0:
                     evaluate_pusht_policy(
                         args,
                         nets,
@@ -432,7 +467,8 @@ def train(
                         ema,
                         env,
                         stats,
-                        train_step,
+                        global_step,
+                        epoch,
                     )
 
         ema_nets = copy.deepcopy(nets)
@@ -449,13 +485,27 @@ def train(
             )
 
         avg_loss = np.mean(epoch_loss)
-        log_data = {"avg_train_loss": avg_loss}
+        log_data = {
+            "global_step": global_step,
+            "epoch": epoch,
+            "epoch/avg_train_loss": avg_loss,
+            "avg_train_loss": avg_loss,
+        }
         val_loss = None
         if val_dataloader is not None:
-            val_loss = validate(args, nets, val_dataloader, noise_scheduler, epoch_step=epoch)
+            val_loss = validate(
+                args,
+                nets,
+                val_dataloader,
+                noise_scheduler,
+                global_step=global_step,
+                epoch=epoch,
+            )
+            log_data["epoch/avg_val_loss"] = val_loss
+            log_data["val/avg_loss"] = val_loss
             log_data["avg_val_loss"] = val_loss
 
-        wandb.log(log_data, step=epoch)
+        wandb.log(log_data, step=global_step)
         val_msg = "" if val_loss is None else f" - Avg. Val Loss: {val_loss:.4f}"
         print(
             f"Epoch {epoch + 1}/{n_epochs + 1} - Avg. Loss: {avg_loss:.4f}"
@@ -463,9 +513,18 @@ def train(
         )
         # If the loss is 0 for a whole epoch, log flag in wandb
         if avg_loss == 0:
-            wandb.log({"zero_loss_epoch": 1}, step=train_step)
+            zero_loss_epoch = 1
         else:
-            wandb.log({"zero_loss_epoch": 0}, step=train_step)
+            zero_loss_epoch = 0
+        wandb.log(
+            {
+                "global_step": global_step,
+                "epoch": epoch,
+                "epoch/zero_loss": zero_loss_epoch,
+                "zero_loss_epoch": zero_loss_epoch,
+            },
+            step=global_step,
+        )
     return
 
 
@@ -496,6 +555,7 @@ def run_training(
 ) -> None:
     exp_name = config.process_name()
     wandb.init(project=config.task_name, config=asdict(config), name=exp_name)
+    configure_wandb_metrics()
 
     try:
         dataloader = build_dataloader(config, dataset, shuffle=True)
@@ -521,14 +581,3 @@ def run_training(
             env.close()
         wandb.finish()
 
-
-def main():
-    from rs_imle_policy.configs.experiment_configs import FrankaExperimentConfigChoice
-
-    config = tyro.cli(FrankaExperimentConfigChoice)
-    train_dataset, val_dataset = build_franka_datasets(config)
-    run_training(config, train_dataset, val_dataset=val_dataset)
-
-
-if __name__ == "__main__":
-    main()
