@@ -135,7 +135,7 @@ class DataConfig:
         "action_pos",
         "action_orien",
         "action_gripper",
-        "progress",
+        # "progress",
     )
 
     # Whether actions are relative to current pose
@@ -179,7 +179,7 @@ class G1ArmsDataConfig(DataConfig):
         "right_action_orien",
         "left_hand_action",
         "right_hand_action",
-        "progress",
+        # "progress",
     )
 
     vision: VisionConfig = field(default_factory=G1VisionConfig)
@@ -199,7 +199,7 @@ class G1LeftArmDataConfig(DataConfig):
         "left_action_pos",
         "left_action_orien",
         "left_hand_action",
-        "progress",
+        # "progress",
     )
 
     vision: VisionConfig = field(default_factory=G1VisionConfig)
@@ -219,7 +219,7 @@ class G1RightArmDataConfig(DataConfig):
         "right_action_pos",
         "right_action_orien",
         "right_hand_action",
-        "progress",
+        # "progress",
     )
 
     vision: VisionConfig = field(default_factory=G1VisionConfig)
@@ -282,7 +282,7 @@ class FlowMatching(BaseModel):
 
     name: str = "flow_matching"
     timestep_integer_scaler: int = 100 # from defaults of RS-IMLE repo
-    num_flow_iters: int = 1
+    num_flow_iters: int = 3
     use_clamping: bool = True
 
 
