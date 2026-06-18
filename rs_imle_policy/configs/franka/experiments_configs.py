@@ -17,7 +17,7 @@ class AbsoluteActionsConfig(DataConfig):
         "action_pos",
         "action_orien",
         "action_gripper",
-        "progress",
+        # "progress",
     )
     action_relative: bool = False
     action_mode: Literal["absolute"] = "absolute"
@@ -31,7 +31,7 @@ class DeltaActionsConfig(DataConfig):
         "delta_pos",
         "delta_orien",
         "action_gripper",
-        "progress",
+        # "progress",
     )
     action_relative: bool = True
     action_mode: Literal["delta"] = "delta"
@@ -45,7 +45,7 @@ class RelativeActionsConfig(DataConfig):
         "relative_pos",
         "relative_orien",
         "action_gripper",
-        "progress",
+        # "progress",
     )
     action_relative: bool = True
     action_mode: Literal["relative"] = "relative"
