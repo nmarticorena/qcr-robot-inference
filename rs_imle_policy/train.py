@@ -178,8 +178,7 @@ def compute_val_rollout_pos_error(
     pred_robot_pos  = torch.from_numpy(pred_robot_actions["pos"]) # [batch_size, action_horizon, 3]
     gt_pos = batch["gt"][:,:,:3,-1]
 
-    per_timestep_l2 =torch.linalg.norm(pred_robot_pos - gt_pos, dim = -1).mean(dim=0)
-    
+    per_timestep_l2 =torch.linalg.norm(pred_robot_pos - gt_pos, dim = -1)   # [batch_size, action_horizon]
 
     return per_timestep_l2
 
@@ -321,11 +320,11 @@ def validate(
 
     if not errors:
         return float("nan")
+    errors = torch.concat(errors, dim=0) # [n_steps, action_horizon]
 
-    # [num_val_batches, pred_horizon]
-    errors = torch.stack(errors, dim=0)
     stats = rollout_error_stats(errors)
 
+    max_error = stats["max"][-1].item()
     mean_error = stats["mean"].mean()
     final_step_error = stats["mean"][-1]
     max_step_error, max_step_idx = stats["mean"].max(dim=0)
@@ -347,7 +346,7 @@ def validate(
 
         wandb.log(log_data, step=train_step)
 
-    return mean_error.item()
+    return max_error
 
 
 def train(
