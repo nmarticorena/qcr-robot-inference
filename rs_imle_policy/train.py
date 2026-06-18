@@ -306,7 +306,7 @@ def validate(
     nets,
     val_dataloader,
     noise_scheduler,
-    train_step: int | None,
+    epoch_step: int | None,
 ) -> float:
     was_training = nets.training
     nets.eval()
@@ -329,7 +329,7 @@ def validate(
     final_step_error = stats["mean"][-1]
     max_step_error, max_step_idx = stats["mean"].max(dim=0)
 
-    if train_step is not None:
+    if epoch_step is not None:
         log_data = {
             "val/rollout_pos_l2_mean": mean_error.item(),
             "val/rollout_pos_l2_final": final_step_error.item(),
@@ -344,7 +344,7 @@ def validate(
         log_data["val/rollout_pos_l2_curve_ci"] = wandb.Image(fig)
         plt.close(fig)
 
-        wandb.log(log_data, step=train_step)
+        wandb.log(log_data, step=epoch_step)
 
     return max_error
 
@@ -449,13 +449,13 @@ def train(
             )
 
         avg_loss = np.mean(epoch_loss)
-        log_data = {"avg_train_loss": avg_loss, "epoch": epoch}
+        log_data = {"avg_train_loss": avg_loss}
         val_loss = None
         if val_dataloader is not None:
-            val_loss = validate(args, nets, val_dataloader, noise_scheduler, train_step)
+            val_loss = validate(args, nets, val_dataloader, noise_scheduler, epoch_step=epoch)
             log_data["avg_val_loss"] = val_loss
 
-        wandb.log(log_data, step=train_step)
+        wandb.log(log_data, step=epoch)
         val_msg = "" if val_loss is None else f" - Avg. Val Loss: {val_loss:.4f}"
         print(
             f"Epoch {epoch + 1}/{n_epochs + 1} - Avg. Loss: {avg_loss:.4f}"
