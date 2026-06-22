@@ -171,6 +171,13 @@ class PandaPolicyDataset(BaseDataset):
         return rlds
 
     def n_action_to_robot_action(self, naction: NDArray, nstate: NDArray) -> dict[str, NDArray]:
+        if nstate.shape[0] != naction.shape[0]:
+            if nstate.shape[0] == 1:
+                nstate = np.repeat(nstate, naction.shape[0], axis=0)
+            else:
+                raise ValueError(f"Batch size mismatch: nstate has {nstate.shape[0]} samples, but naction has {naction.shape[0]} samples.")
+
+
         actions = unnormalize_data(naction, stats = self.stats["action"])
         states = unnormalize_data(nstate, stats = self.stats["state"])
         robot_action = {}
