@@ -92,7 +92,7 @@ grad-cam = ">=1.5.5,<2"
 robot_descriptions = ">=1.22.0,<2"
 # motion_tools = ">=0.1.17,<0.2"
 cyclonedds = {channel = "nmarticorena", version = ">=0.10.2,<0.11"}
-cyclonedds-py = ">=0.10.2,<0.11"
+cyclonedds-py = {channel ="nmarticorena", version = ">=0.10.2,<0.11"}
 compilers = ">=1.3.0,<2"
 pinocchio = ">=3.9.0,<4"
 # pink = ">=4"
