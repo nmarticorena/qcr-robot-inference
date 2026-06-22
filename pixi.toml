@@ -21,6 +21,9 @@ reset_g1 = {cmd = "python3 scripts/reset_g1.py"}
 # Linter specific
 format_urdf = {cmd = "bash format_urdf.sh"}
 
+#hpc tasks
+install = {cmd = "qsub install_dependencies.sh"}
+
 [activation.env]
 PANDA_IP = "172.16.0.2"
 G1_IP = "192.168.123.164"
