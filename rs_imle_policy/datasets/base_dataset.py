@@ -9,7 +9,7 @@ import abc
 import pathlib
 import pickle as pkl
 from collections import defaultdict
-from typing import Callable, Optional, List, Sequence, Self, Any
+from typing import Callable, Optional, List, Sequence, Self, Any, overload, TypeAlias, Mapping
 import matplotlib.pyplot as plt
 import spatialmath as sm
 
@@ -22,6 +22,9 @@ from numpy.typing import NDArray
 from torch.utils.data import Dataset
 
 from rs_imle_policy.configs.train_config import VisionConfig, ExperimentConfig
+
+Array: TypeAlias = NDArray[np.floating] | torch.Tensor
+Stats: TypeAlias = Mapping[str, Array]
 
 
 RAW_ORIENTATION_PREFIXES = ("orien_",)
@@ -88,10 +91,16 @@ class BaseDataset(Dataset, abc.ABC):
             raise ValueError("Dataset contains no episodes after filtering.")
 
         self.stats: dict[str, dict[str, NDArray]] = defaultdict(dict)
+        self.torch_stats: dict[str, dict[str, torch.Tensor]] = defaultdict(dict)
         if normalization_stats is None:
             self.compute_normalization_stats()
         else:
             self.stats.update(normalization_stats)
+
+        self.torch_stats = {
+            key: {stat_key: torch.tensor(stat_value, dtype=torch.float32).to("cuda") for stat_key, stat_value in stat_dict.items()}
+            for key, stat_dict in self.stats.items()
+        }
 
         if self.save_normalization_stats:
             with open(self.dataset_path / "stats.pkl", "wb") as f:
@@ -151,7 +160,7 @@ class BaseDataset(Dataset, abc.ABC):
         """Build an RLDS-like dictionary from raw dataset files."""
 
     @abc.abstractmethod
-    def n_action_to_robot_action(self, naction: NDArray, nstate:NDArray) -> dict[str, NDArray]:
+    def n_action_to_robot_action(self, naction: torch.Tensor, nstate:torch.Tensor) -> dict[str, torch.Tensor]:
         """Convert normalized action to action for the robot"""
 
     def compute_normalization_stats(self):
@@ -483,17 +492,27 @@ def normalize_data(data: NDArray, stats: dict) -> NDArray:
     ndata = ndata * 2 - 1  # Normalize to [-1,1]
     return ndata
 
+@overload
+def unnormalize_data(
+    ndata: torch.Tensor,
+    stats: Mapping[str, torch.Tensor],
+) -> torch.Tensor: ...
 
-def unnormalize_data(ndata: NDArray, stats: dict) -> NDArray:
-    """Unnormalize data from [-1, 1] range to original range.
 
-    Args:
-        ndata: Normalized data in range [-1, 1]
-        stats: Dictionary containing 'min' and 'max' statistics
+@overload
+def unnormalize_data(
+    ndata: NDArray[np.floating],
+    stats: Mapping[str, NDArray[np.floating]],
+) -> NDArray[np.floating]: ...
 
-    Returns:
-        Data in original range
-    """
+
+def unnormalize_data(
+    ndata: Array,
+    stats: Stats,
+) -> Array:
+    """Unnormalize data from [-1, 1] range to original range."""
+
     ndata = (ndata + 1) / 2
     data = ndata * (stats["max"] - stats["min"]) + stats["min"]
     return data
+

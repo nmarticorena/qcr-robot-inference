@@ -4,11 +4,9 @@ This module provides dataset classes and data normalization utilities
 for training robot manipulation policies from demonstrations.
 """
 from rs_imle_policy.datasets import unnormalize_data
-from numpy.typing import NDArray
 
 import json
 import os
-from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
@@ -170,16 +168,15 @@ class PandaPolicyDataset(BaseDataset):
                 rlds[episode_index]["action"] = action
         return rlds
 
-    def n_action_to_robot_action(self, naction: NDArray, nstate: NDArray) -> dict[str, NDArray]:
+    def n_action_to_robot_action(self, naction: torch.Tensor, nstate: torch.Tensor) -> dict[str, torch.Tensor]:
         if nstate.shape[0] != naction.shape[0]:
             if nstate.shape[0] == 1:
-                nstate = np.repeat(nstate, naction.shape[0], axis=0)
+                nstate = nstate.expand(naction.shape[0], *nstate.shape[1:])
             else:
                 raise ValueError(f"Batch size mismatch: nstate has {nstate.shape[0]} samples, but naction has {naction.shape[0]} samples.")
 
-
-        actions = unnormalize_data(naction, stats = self.stats["action"])
-        states = unnormalize_data(nstate, stats = self.stats["state"])
+        actions = unnormalize_data(naction, stats = self.torch_stats["action"])
+        states = unnormalize_data(nstate, stats = self.torch_stats["state"])
         robot_action = {}
         robot_action["progress"] = actions[...,-1:]
         robot_action["gripper"] = actions[...,-1:]
@@ -188,10 +185,10 @@ class PandaPolicyDataset(BaseDataset):
             batch_rot = []
             for batch_idx in range(actions.shape[0]):
                 pos = states[batch_idx, -1, :3]
-                rot = transform_utils.rotation_6d_to_matrix(states[batch_idx, -1, 3:9]).numpy()
+                rot = transform_utils.rotation_6d_to_matrix(states[batch_idx, -1, 3:9])
                 trans = actions[batch_idx, :, :3]
                 rot_6d = actions[batch_idx, :, 3:9]
-                rot_mats = transform_utils.rotation_6d_to_matrix(torch.from_numpy(rot_6d)).numpy()
+                rot_mats = transform_utils.rotation_6d_to_matrix(rot_6d)
                 if self.action_mode == "delta":
                     trans, rot_mats = self.delta_action_to_absolute(trans, rot_mats, pos, rot)
                 else:
@@ -199,65 +196,77 @@ class PandaPolicyDataset(BaseDataset):
                 batch_pos.append(trans)
                 batch_rot.append(rot_mats)
 
-            robot_action["pos"] = np.stack(batch_pos, axis=0)
-            robot_action["rot"] = np.stack(batch_rot, axis=0)
+            robot_action["pos"] = torch.stack(batch_pos, dim=0)
+            robot_action["rot"] = torch.stack(batch_rot, dim=0)
         else:
             robot_action["pos"] = actions[..., :3]
-            robot_action["rot"] = transform_utils.rotation_6d_to_matrix(torch.from_numpy(actions[...,3:9])).numpy()
-
+            robot_action["rot"] = transform_utils.rotation_6d_to_matrix(actions[...,3:9])
         return robot_action
 
     def delta_action_to_absolute(
         self,
-        trans: NDArray,
-        rots: NDArray,
-        p0: NDArray,
-        r0: NDArray,
-    ) -> tuple[NDArray, NDArray]:
+        trans: torch.Tensor,
+        rots: torch.Tensor,
+        p0: torch.Tensor,
+        r0: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Transform consecutive delta actions to absolute actions.
+
         Args:
-            trans (NDArray): Nx3 array of translations
-            rots (NDArray): Nx3x3 array of rotation matrices
+            trans: Tensor with shape [N, 3]
+            rots: Tensor with shape [N, 3, 3]
+            p0: Tensor with shape [3]
+            r0: Tensor with shape [3, 3]
+
         Returns:
-            tuple[NDArray, NDArray]: absolute translations and rotations
+            absolute translations [N, 3] and rotations [N, 3, 3]
         """
-        n_actions = len(trans)
+        n_actions = trans.shape[0]
+
         current_rot = r0
         current_pos = p0
-        translations = np.empty_like(trans)
-        rotations = np.empty_like(rots)
+
+        translations = torch.empty_like(trans)
+        rotations = torch.empty_like(rots)
+
         for i in range(n_actions):
             rel_rot = rots[i]
             rel_trans = trans[i]
+
             rotations[i] = current_rot @ rel_rot
             translations[i] = current_pos + current_rot @ rel_trans
+
             current_rot = rotations[i]
             current_pos = translations[i]
-        return translations, rotations
 
+        return translations, rotations 
+    
     def relative_action_to_absolute(
         self,
-        trans: NDArray,
-        rots: NDArray,
-        p0: NDArray,
-        r0: NDArray ,
-    ) -> tuple[NDArray, NDArray]:
+        trans: torch.Tensor,
+        rots: torch.Tensor,
+        p0: torch.Tensor,
+        r0: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Transform anchor-relative actions to absolute actions.
 
         Every action is expressed with respect to the same anchor pose.
+
+        Args:
+            trans: Tensor with shape [N, 3]
+            rots: Tensor with shape [N, 3, 3]
+            p0: Tensor with shape [3]
+            r0: Tensor with shape [3, 3]
+
+        Returns:
+            absolute translations [N, 3] and rotations [N, 3, 3]
         """
-        current_rot = r0 
-        current_pos = p0
-        rotations = current_rot @ rots
-        translations = current_pos + np.einsum("ij,nj->ni", current_rot, trans)
-        return translations, rotations
+        rotations = r0 @ rots
+        translations = p0 + torch.einsum("ij,nj->ni", r0, trans)
 
-
-
-        
-
+        return translations, rotations 
 
 if __name__ == "__main__":
     import time
