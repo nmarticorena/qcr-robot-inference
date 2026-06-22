@@ -247,6 +247,8 @@ class OptimConfig:
     num_warmup_steps: int = 500
     eval_interval: int = 10
     num_eval_episodes: int = 1
+    val_n_samples: int = 16
+    val_max_batches: Optional[int] = None
     save_period: int = 50
     keypoint_metrics_log_interval: int = 100
 
@@ -302,7 +304,7 @@ class ExperimentConfig:
     """Main training configuration"""
 
     dataset_path: pathlib.Path
-    model: BaseModel = field(default_factory = BaseModel())
+    model: BaseModel = field(default_factory=BaseModel)
     exp_name: str = "test"
     task_name: str = "default"
     debug: bool = False

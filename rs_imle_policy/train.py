@@ -6,7 +6,7 @@ import shutil
 import time
 from collections import deque
 from dataclasses import asdict
-from typing import TypeVar, Optional
+from typing import TypeVar, Optional, Any
 
 import numpy as np
 import torch
@@ -64,16 +64,29 @@ def sample_normalized_actions(
     nets,
     noise_scheduler,
     obs_cond: torch.Tensor,
-    batch_size: int = 1,
+    batch_size: int | None = None,
+    noisy_action: torch.Tensor | None = None,
 ) -> torch.Tensor:
     device = args.model.device
     action_shape = args.action_shape
-    sample_shape = (batch_size, args.model.pred_horizon, action_shape)
+    obs_cond = obs_cond.to(device)
+    if noisy_action is None:
+        batch_size = obs_cond.shape[0] if batch_size is None else batch_size
+        sample_shape = (batch_size, args.model.pred_horizon, action_shape)
+        noisy_action = torch.randn(sample_shape, device=device)
+    else:
+        noisy_action = noisy_action.to(device)
+        batch_size = noisy_action.shape[0]
+
+    if obs_cond.shape[0] != batch_size:
+        raise ValueError(
+            f"obs_cond has batch size {obs_cond.shape[0]}, but action sample batch size is {batch_size}."
+        )
 
     if isinstance(args.model, Diffusion):
         if noise_scheduler is None:
             raise ValueError("Diffusion evaluation requires a noise scheduler.")
-        naction = torch.randn(sample_shape, device=device)
+        naction = noisy_action
         noise_scheduler.set_timesteps(args.model.num_diffusion_iters)
 
         for timestep in noise_scheduler.timesteps:
@@ -90,11 +103,11 @@ def sample_normalized_actions(
         return naction
 
     if isinstance(args.model, RSIMLE):
-        noise = torch.clamp(torch.randn(sample_shape, device=device), -1, 1)
+        noise = torch.clamp(noisy_action, -1, 1)
         return nets["generator"](noise, global_cond=obs_cond)
 
     if isinstance(args.model, FlowMatching):
-        naction = torch.randn(sample_shape, device=device)
+        naction = noisy_action
         ts = torch.linspace(0.0, 1.0, args.model.num_flow_iters + 1, device=device)[:-1]
         dt = 1.0 / args.model.num_flow_iters
         for t in ts:
@@ -107,7 +120,7 @@ def sample_normalized_actions(
             naction = naction + pred * dt
         return naction
 
-    raise NotImplementedError(f"Model type {type(args.model)} is not supported for PushT evaluation.")
+    raise NotImplementedError(f"Model type {type(args.model)} is not supported for action sampling.")
 
 
 def pusht_obs_cond(args: ExperimentConfig, nets, obs_history, stats: dict) -> torch.Tensor:
@@ -129,19 +142,23 @@ def pusht_obs_cond(args: ExperimentConfig, nets, obs_history, stats: dict) -> to
     return obs_features.flatten(start_dim=1)
 
 @torch.no_grad()
-def compute_val_rollout_pos_error(
+def compute_val_multimodal_metrics(
     args: ExperimentConfig,
     nets,
     noise_scheduler,
-    batch:dict,
+    batch: dict,
     dataset: BaseDataset,
-) -> torch.Tensor:
+) -> dict[str, torch.Tensor]:
     device = args.model.device
     obs_horizon = args.model.obs_horizon
     cams_names = args.data.vision.cameras
+    n_samples = args.training_params.val_n_samples
+    if n_samples < 1:
+        raise ValueError(f"val_n_samples must be at least 1, got {n_samples}.")
 
     nagent = batch["state"][:, :obs_horizon].to(device)
     naction = batch["action"].to(device)
+    batch_size = naction.shape[0]
 
     images = [batch[f"frame_{cam}"][:, :obs_horizon].to(device) for cam in cams_names]
     image_features = [
@@ -150,40 +167,54 @@ def compute_val_rollout_pos_error(
 
     obs_features = torch.cat([*image_features, nagent], dim=-1)
     obs_cond = obs_features.flatten(start_dim=1)
-    noise = torch.randn(naction.shape, device=device)
+    repeated_obs_cond = obs_cond.repeat_interleave(n_samples, dim=0)
 
-    if isinstance(args.model, Diffusion):
-        noise_actions = noise
-        for k in noise_scheduler.timesteps:
-            noise_pred = nets["noise_pred_net"](sample = noise_actions, timestep=k, global_cond=obs_cond)
-            noise_actions = noise_scheduler.step(model_output = noise_pred, timestep = int(k), sample = noise_actions).prev_sample
-    elif isinstance(args.model, RSIMLE):
-        noise_actions = nets["generator"](noise, global_cond = obs_cond)
+    noisy_action = torch.randn(
+        batch_size * n_samples,
+        args.model.pred_horizon,
+        args.action_shape,
+        device=device,
+    )
+    pred_naction = sample_normalized_actions(
+        args,
+        nets,
+        noise_scheduler,
+        repeated_obs_cond,
+        noisy_action=noisy_action,
+    )
+    pred_naction = pred_naction.reshape(
+        batch_size,
+        n_samples,
+        args.model.pred_horizon,
+        args.action_shape,
+    )
 
-    elif isinstance(args.model, FlowMatching):
-        noise_actions = noise
-        ts = torch.linspace(0.0, 1.0, args.model.num_flow_iters+1, device = args.model.device)[:-1]
-        dt = 1.0 / args.model.num_flow_iters
-        for t in ts:
-            timestep = (t * args.model.timestep_integer_scaler).long()
+    repeated_nagent = nagent.repeat_interleave(n_samples, dim=0)
+    pred_robot_action = dataset.n_action_to_robot_action(
+        pred_naction.reshape(batch_size * n_samples, args.model.pred_horizon, args.action_shape),
+        repeated_nagent,
+    )
+    pred_pos = pred_robot_action["pos"].reshape(batch_size, n_samples, args.model.pred_horizon, -1)
 
-            # predict noise
-            pred = nets['noise_pred_net'](
-                sample=noise_actions,
-                timestep=timestep,
-                global_cond=obs_cond
-            )
-            noise_actions = noise_actions + pred * dt
+    target_robot_action = dataset.n_action_to_robot_action(naction, nagent)
+    target_pos = target_robot_action["pos"][:, None]
 
+    pos_error = torch.linalg.norm(pred_pos - target_pos, dim=-1)
+    ade = pos_error.mean(dim=-1)
+    fde = pos_error[..., -1]
+    best_sample_idx = ade.argmin(dim=1)
+    batch_idx = torch.arange(batch_size, device=device)
 
-    pred_actions = noise_actions.detach().to("cpu").numpy() # [batch_size, action_horizon, action_dim]
-    pred_robot_actions = dataset.n_action_to_robot_action(pred_actions, batch["state"])
-    pred_robot_pos  = torch.from_numpy(pred_robot_actions["pos"]) # [batch_size, action_horizon, 3]
-    gt_pos = batch["gt"][:,:,:3,-1]
+    sample_pos = pred_pos.mean(dim=2)
+    pairwise = torch.cdist(sample_pos, sample_pos)
 
-    per_timestep_l2 =torch.linalg.norm(pred_robot_pos - gt_pos, dim = -1)   # [batch_size, action_horizon]
-
-    return per_timestep_l2
+    return {
+        "min_ade": ade.min(dim=1).values,
+        "min_fde": fde.min(dim=1).values,
+        "mean_ade": ade.mean(dim=1),
+        "diversity": pairwise.mean(dim=(1, 2)),
+        "best_pos_error": pos_error[batch_idx, best_sample_idx],
+    }
 
 
 
@@ -304,7 +335,7 @@ def make_rollout_error_plot(errors: torch.Tensor, stats: dict[str, torch.Tensor]
     return fig
 
 
-@torch.no_grad()
+@torch.inference_mode()
 def validate(
     args: ExperimentConfig,
     nets,
@@ -315,21 +346,45 @@ def validate(
 ) -> float:
     was_training = nets.training
     nets.eval()
-    errors = []
+    metrics = {
+        "min_ade": [],
+        "min_fde": [],
+        "mean_ade": [],
+        "diversity": [],
+        "best_pos_error": [],
+    }
 
-    for batch in tqdm(val_dataloader, desc="Validation", leave=False, unit="batch"):
-        error = compute_val_rollout_pos_error(args, nets, noise_scheduler, batch, val_dataloader.dataset)
-        errors.append(error.detach().cpu())
-    if was_training:
-        nets.train()
+    try:
+        for batch_idx, batch in enumerate(tqdm(val_dataloader, desc="Validation", leave=False, unit="batch")):
+            val_max_batches = args.training_params.val_max_batches
+            if val_max_batches is not None and batch_idx >= val_max_batches:
+                break
 
-    if not errors:
+            batch_metrics = compute_val_multimodal_metrics(
+                args,
+                nets,
+                noise_scheduler,
+                batch,
+                val_dataloader.dataset,
+            )
+            for name, value in batch_metrics.items():
+                metrics[name].append(value.detach().cpu())
+    finally:
+        if was_training:
+            nets.train()
+
+    if not metrics["min_ade"]:
         return float("nan")
-    errors = torch.concat(errors, dim=0) # [n_steps, action_horizon]
+
+    metrics = {name: torch.concat(values, dim=0) for name, values in metrics.items()}
+    errors = metrics["best_pos_error"]
 
     stats = rollout_error_stats(errors)
 
-    max_error = stats["max"][-1].item()
+    min_ade = metrics["min_ade"].mean()
+    min_fde = metrics["min_fde"].mean()
+    mean_ade = metrics["mean_ade"].mean()
+    diversity = metrics["diversity"].mean()
     mean_error = stats["mean"].mean()
     final_step_error = stats["mean"][-1]
     max_step_error, max_step_idx = stats["mean"].max(dim=0)
@@ -337,6 +392,10 @@ def validate(
     log_data = {
         "global_step": global_step,
         "epoch": epoch,
+        "val/min_ade": min_ade.item(),
+        "val/min_fde": min_fde.item(),
+        "val/mean_ade": mean_ade.item(),
+        "val/diversity": diversity.item(),
         "val/rollout_pos_l2_mean": mean_error.item(),
         "val/rollout_pos_l2_final": final_step_error.item(),
         "val/rollout_pos_l2_max": max_step_error.item(),
@@ -347,13 +406,9 @@ def validate(
     for i, error in enumerate(stats["mean"]):
         log_data[f"val/rollout_pos_l2_step_{i:02d}"] = error.item()
 
-    fig = make_rollout_error_plot(errors, stats)
-    log_data["val/rollout_pos_l2_curve_ci"] = wandb.Image(fig)
-    plt.close(fig)
-
     wandb.log(log_data, step=global_step)
 
-    return max_error
+    return min_ade.item()
 
 
 def configure_wandb_metrics() -> None:
@@ -361,16 +416,9 @@ def configure_wandb_metrics() -> None:
     wandb.define_metric("epoch")
 
     wandb.define_metric("train/*", step_metric="global_step")
-    wandb.define_metric("val/*", step_metric="epoch")
+    wandb.define_metric("val/*", step_metric="global_step")
     wandb.define_metric("epoch/*", step_metric="epoch")
     wandb.define_metric("eval/*", step_metric="global_step")
-
-    # # Keep legacy metric names on the intended axes while newer names use namespaces.
-    # wandb.define_metric("loss", step_metric="global_step")
-    # wandb.define_metric("zero_loss", step_metric="global_step")
-    # wandb.define_metric("avg_train_loss", step_metric="epoch")
-    # wandb.define_metric("avg_val_loss", step_metric="epoch")
-    # wandb.define_metric("zero_loss_epoch", step_metric="epoch")
 
 
 def train(
@@ -383,7 +431,7 @@ def train(
     ema,
     stats: dict,
     val_dataloader=None,
-    env: Optional = None,
+    env: Optional[Any] = None,
 ):
     nets.train()
 
@@ -501,12 +549,10 @@ def train(
                 global_step=global_step,
                 epoch=epoch,
             )
-            log_data["epoch/avg_val_loss"] = val_loss
-            log_data["val/avg_loss"] = val_loss
-            log_data["avg_val_loss"] = val_loss
+            log_data["epoch/val_min_ade"] = val_loss
 
         wandb.log(log_data, step=global_step)
-        val_msg = "" if val_loss is None else f" - Avg. Val Loss: {val_loss:.4f}"
+        val_msg = "" if val_loss is None else f" - Val minADE: {val_loss:.4f}"
         print(
             f"Epoch {epoch + 1}/{n_epochs + 1} - Avg. Loss: {avg_loss:.4f}"
             f"{val_msg} - Time: {time.time() - start_time:.2f}s"
