@@ -8,6 +8,7 @@ from numpy.typing import NDArray
 import numpy as np
 
 import spatialmath as sm
+import spatialmath.base as smb
 
 
 def matrix_to_rotation_6d(matrix: Union[torch.Tensor, NDArray]) -> torch.Tensor:
@@ -199,3 +200,36 @@ def extract_robot_pos_orien(poses: NDArray) -> Tuple[NDArray, torch.Tensor]:
     xyz = poses[..., :3, 3]
     rot_6d = matrix_to_rotation_6d(poses[..., :3, :3])
     return xyz, rot_6d
+
+def se3_from_pos_quat(pos: Union[torch.Tensor, NDArray], quat: Union[torch.Tensor, NDArray]) -> List[sm.SE3]:
+    """Convert position and quaternion to SE3 object.
+
+    Args:
+        pos: Position tensor of shape (..., 3).
+        quat: Quaternion tensor of shape (..., 4) in (w, x, y, z) format.
+
+    Returns:
+        SE3 object representing the pose.
+    """
+    if isinstance(pos, torch.Tensor):
+        pos = pos.cpu().numpy()
+    if isinstance(quat, torch.Tensor):
+        quat = quat.cpu().numpy()
+
+    if len(pos.shape) == 1:
+        pose = np.eye(4)
+    else:
+        pose = np.repeat((np.eye(4)[None, :, :]), pos.shape[0], axis=0)
+
+    rot_m = smb.q2r(quat, order="sxyz")
+    t = pos
+
+    pose[..., :3, :3] = rot_m
+    pose[..., :3, 3] = t
+
+    if len(pos.shape) > 1:
+        se3 = [sm.SE3(p) for p in pose]
+    else:
+        se3 = [sm.SE3(pose)]
+
+    return se3

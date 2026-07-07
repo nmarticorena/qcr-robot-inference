@@ -356,6 +356,18 @@ class G1ReducedPinkIK:
             right=data.oMf[self.right_ee_id].copy(),
         )
 
+    def pos_error(self) -> tuple[float, float]:
+        """
+        Compute the position error for the left and right end-effectors.
+        Returns:
+            Tuple of (left_pos_error, right_pos_error) in meters.
+        """
+        left_error = self.left_task.compute_error(self.configuration)
+        right_error = self.right_task.compute_error(self.configuration)
+        left_pos_error = np.linalg.norm(left_error[:3])
+        right_pos_error = np.linalg.norm(right_error[:3])
+        return float(left_pos_error), float(right_pos_error)
+
     def compute_errors(self) -> tuple[dict[str, float], dict[str, float]]:
         """
         Compute the error and cost-weighted errors for each of the tasks and barrriers
