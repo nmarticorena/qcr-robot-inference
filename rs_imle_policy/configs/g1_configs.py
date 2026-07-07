@@ -68,7 +68,7 @@ class G1IKConfig:
 
 @dataclass
 class G1IKConfigSim(G1IKConfig):
-    urdf_path: str = "assets/g1_29dof_rev_1_0_with_inspire_hand_DFQ.urdf"
+    urdf_path: str = "assets/g1_no_hands.urdf"
     srdf_path: str = "assets/g1_29dof_rev_1_0_with_inspire_hand_FTP.srdf"
 
 
