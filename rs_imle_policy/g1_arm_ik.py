@@ -17,7 +17,7 @@ from pink.limits import AccelerationLimit
 from pink.tasks import DampingTask, FrameTask, PostureTask
 from pink.utils import process_collision_pairs
 from pink.visualization import start_viser_visualizer
-from scipy.spatial.transform import Rotation
+from scipy.spatial.transform import Rotation, Slerp
 
 from rs_imle_policy.utils.collision_utils import force_convex_collision_geometry
 from rs_imle_policy.utils.urdf_utils import (
@@ -158,6 +158,9 @@ class G1ReducedPinkIK:
                 task.set_target_from_configuration(self.configuration)
             if isinstance(task, PostureTask):
                 task.set_target_from_configuration(self.configuration)
+                
+        self.home_left_target = self.left_task.transform_target_to_world.copy()
+        self.home_right_target = self.right_task.transform_target_to_world.copy()
 
         return
 
@@ -293,6 +296,44 @@ class G1ReducedPinkIK:
         if right is not None:
             self.right_task.set_target(self._as_se3(right))
 
+    def set_target_smooth(
+        self,
+        left: pin.SE3 | np.ndarray | None = None,
+        right: pin.SE3 | np.ndarray | None = None,
+        alpha: float = 0.1,
+    ) -> None:
+        def set_smooth(base: pin.SE3, target: pin.SE3, alpha: float) -> pin.SE3:
+            """Interpolate between current and target SE3 transforms using
+            SLERP for rotation and linear interpolation for translation.
+            """
+            base_rot = Rotation.from_matrix(base.rotation)
+            target_rot = Rotation.from_matrix(target.rotation)
+
+            key_times = [0.0, 1.0]
+            key_rots = Rotation.concatenate([base_rot, target_rot])
+            slerp = Slerp(key_times, key_rots)
+
+            new_rot = slerp(alpha)
+            new_translation = (
+                (1.0 - alpha) * base.translation +
+                alpha * target.translation
+            )
+
+            return pin.SE3(new_rot.as_matrix(), new_translation)
+
+        """Move the target from the default pose"""
+        if left is not None:
+            self.left_task.set_target(
+                set_smooth(self.home_left_target, 
+                           self._as_se3(left), 
+                           alpha))
+        if right is not None:
+            self.right_task.set_target(
+                set_smooth(self.home_right_target, 
+                           self._as_se3(right), 
+                           alpha))
+
+        
     def step(self, dt: float = 0.01) -> np.ndarray:
         velocity = solve_ik(
             self.configuration,
