@@ -1,8 +1,8 @@
-from unitree_sdk2py.core.channel import ChannelFactoryInitialize, ChannelPublisher
-from unitree_sdk2py.idl.std_msgs.msg.dds_ import String_
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+
+from rs_imle_policy.utils.dds import reset_sim
 
 
-RESET_TOPIC = "rt/reset_category"
 
 
 def main(
@@ -10,11 +10,8 @@ def main(
     network_interface: str = "lo",
 ) -> None:
     ChannelFactoryInitialize(id=domain_id, networkInterface=network_interface)
-
-    publisher = ChannelPublisher(RESET_TOPIC, String_)
-    publisher.Init()
-    publisher.Write(String_(data="-1"))
-    print(f"Published dolly reset on {RESET_TOPIC}")
+    reset_sim()
+    print("Done")
 
 
 if __name__ == "__main__":
