@@ -2,7 +2,8 @@
 authors = [""]
 channels = ["conda-forge", "nmarticorena"]
 name = "real-robot-inference"
-platforms = [{"linux-64", cuda="12.4"}]
+platforms = [{ platform = "linux-64", cuda = "12.4" }]
+
 version = "1.0.0"
 
 [tasks]
