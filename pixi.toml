@@ -18,7 +18,8 @@ gripper_home = {cmd = "python3 scripts/robot/home_gripper.py" }
 
 # G1 Specific
 reset_g1 = {cmd = "python3 scripts/reset_g1.py"}
-reset_g1_sim = {cmd = "python3 scripts/g1_utils/reset_g1_sim.py"}
+reset_sim = {cmd = "python3 scripts/g1_utils/reset_sim.py"}
+reset_sim_dolly = {cmd = "python3 scripts/g1_utils/reset_sim_dolly.py"}
 
 # Linter specific
 format_urdf = {cmd = "bash format_urdf.sh"}
