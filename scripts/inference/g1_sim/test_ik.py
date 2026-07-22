@@ -17,7 +17,7 @@ from unitree_sdk2py.idl.std_msgs.msg.dds_ import String_
 img_client = ImageClient("vlu-isaacsim.qut.edu.au", request_bgr=True)
 
 
-ChannelFactoryInitialize(id=1)  # dds domain id
+ChannelFactoryInitialize(id=1, networkInterface="lo")  # dds domain id
 
 
 def publish_reset_category(category: int, publisher):  # Scene Reset signal
@@ -31,17 +31,13 @@ publish_reset_category(1, reset_pose_publisher)
 
 
 rec = rr.RecordingStream("g1_arm_controller_test")
-controller = G1_29_ArmController(motion_mode=False, simulation_mode=True)
+controller = G1_29_ArmController(motion_mode=True, simulation_mode=True)
 frecuecy = 200
-rec.spawn()
+# rec.spawn()
 
 ik = G1ReducedPinkIK(
-    urdf_path="assets/g1.urdf",
-    mesh_dirs=["assets/"],
-    srdf_path="assets/g1.srdf",
     visualize=True,
     spawn_visualizer=True,
-    enable_self_collision=False,
 )
 
 
@@ -87,9 +83,7 @@ while True:
     controller.ctrl_dual_arm(q_sol, q_tauff)
     robot_gui.rec.log(
         "cameras/head_frame",
-        rr.EncodedImage(
-            contents=img_client.get_head_frame().jpg, media_type="image/jpeg"
-        ),
+        rr.EncodedImage(contents=img_client.get_head_frame().jpg, media_type="image/jpeg"),
     )
 
     rate.sleep()
