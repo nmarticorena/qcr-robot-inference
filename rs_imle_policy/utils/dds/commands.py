@@ -11,7 +11,7 @@ def reset_sim(channel: str = "rt/reset_category") -> None:
     publish_string(channel, "-1")
 
 
-def reset_dolly(channel: str="rt/reset_dolly") -> None:
+def reset_dolly(channel: str = "rt/reset_dolly") -> None:
     """Reset the dolly through the configured DDS channel."""
     publish_string(channel, "reset")
 
