@@ -70,8 +70,9 @@ class G1IKConfig:
 class G1IKConfigSim(G1IKConfig):
     urdf_path: str = "assets/g1_no_hands.urdf"
     srdf_path: str = "assets/g1_29dof_rev_1_0_with_inspire_hand_FTP.srdf"
-    damping_cost: float = 1.
-    acceleration_limit: Optional[float] = 100.
+    damping_cost: float = 1.0
+    acceleration_limit: Optional[float] = None
+    posture_cost: float = 1e-2
 
     ee_offset: float = 0.0
     # box_barrier_gain: float = 1.0
